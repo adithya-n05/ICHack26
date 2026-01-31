@@ -1,0 +1,140 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  /* Background Hierarchy */
+  --color-bg-void: #08080a;
+  --color-bg-base: #0c0c0e;
+  --color-bg-raised: #111113;
+  --color-bg-surface: #161618;
+  --color-bg-elevated: #1c1c1f;
+  --color-bg-hover: #222225;
+
+  /* Text */
+  --color-text-primary: #ececed;
+  --color-text-secondary: #9c9ca0;
+  --color-text-tertiary: #6c6c70;
+  --color-text-quaternary: #4c4c50;
+
+  /* Status */
+  --color-healthy: #22c55e;
+  --color-at-risk: #f59e0b;
+  --color-critical: #ef4444;
+
+  /* Risk Heatmap */
+  --color-risk-war: #ef4444;
+  --color-risk-earthquake: #f97316;
+  --color-risk-storm: #06b6d4;
+  --color-risk-political: #a855f7;
+  --color-risk-tariff: #eab308;
+
+  /* Fonts */
+  --font-family-sans: 'IBM Plex Sans', -apple-system, sans-serif;
+  --font-family-mono: 'IBM Plex Mono', monospace;
+}
+
+:root {
+  /* Background Hierarchy */
+  --bg-void: #08080a;
+  --bg-base: #0c0c0e;
+  --bg-raised: #111113;
+  --bg-surface: #161618;
+  --bg-elevated: #1c1c1f;
+  --bg-hover: #222225;
+
+  /* Text */
+  --text-primary: #ececed;
+  --text-secondary: #9c9ca0;
+  --text-tertiary: #6c6c70;
+  --text-quaternary: #4c4c50;
+
+  /* Borders */
+  --border-subtle: rgba(255,255,255,0.04);
+  --border-default: rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.12);
+
+  /* Status */
+  --healthy: #22c55e;
+  --healthy-dim: rgba(34,197,94,0.12);
+  --healthy-glow: rgba(34,197,94,0.35);
+  --at-risk: #f59e0b;
+  --at-risk-dim: rgba(245,158,11,0.12);
+  --at-risk-glow: rgba(245,158,11,0.35);
+  --critical: #ef4444;
+  --critical-dim: rgba(239,68,68,0.12);
+  --critical-glow: rgba(239,68,68,0.35);
+
+  /* Risk Heatmap */
+  --risk-war: #ef4444;
+  --risk-earthquake: #f97316;
+  --risk-storm: #06b6d4;
+  --risk-political: #a855f7;
+  --risk-tariff: #eab308;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+  font-size: 13px;
+  background: var(--bg-void);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-elevated);
+  border-radius: 2px;
+}
+
+/* Mapbox overrides */
+.mapboxgl-ctrl-attrib {
+  display: none !important;
+}
+
+.mapboxgl-ctrl-logo {
+  display: none !important;
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 8px var(--healthy-glow); }
+  50% { box-shadow: 0 0 16px var(--healthy-glow); }
+}
+
+.animate-pulse-slow {
+  animation: pulse 2s ease infinite;
+}
+
+.animate-pulse-fast {
+  animation: pulse 1s ease infinite;
+}
+
+.animate-glow {
+  animation: glow 1.5s ease infinite;
+}
