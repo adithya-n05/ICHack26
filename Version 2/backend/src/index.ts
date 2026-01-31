@@ -9,6 +9,7 @@ import companiesRouter from './routes/companies';
 import suppliersRouter from './routes/suppliers';
 import connectionsRouter from './routes/connections';
 import eventsRouter from './routes/events';
+import tariffsRouter from './routes/tariffs';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -46,6 +47,7 @@ app.use('/api/companies', companiesRouter);
 app.use('/api/suppliers', suppliersRouter);
 app.use('/api/connections', connectionsRouter);
 app.use('/api/events', eventsRouter);
+app.use('/api/tariffs', tariffsRouter);
 
 app.get('/health', async (req, res) => {
   try {
