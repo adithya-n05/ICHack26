@@ -5,9 +5,23 @@ const router = Router();
 
 router.get('/', async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('tariffs')
-      .select('*');
+    const { fromCountry, toCountry, productCategory } = req.query;
+
+    let query = supabase.from('tariffs').select('*');
+
+    if (fromCountry) {
+      query = query.eq('from_country', fromCountry);
+    }
+
+    if (toCountry) {
+      query = query.eq('to_country', toCountry);
+    }
+
+    if (productCategory) {
+      query = query.eq('product_category', productCategory);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       return res.status(500).json({ error: error.message });
