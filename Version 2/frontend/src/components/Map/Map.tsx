@@ -63,6 +63,15 @@ const SAMPLE_EVENTS = [
 
 type EventData = (typeof SAMPLE_EVENTS)[0];
 
+const EVENT_COLORS: Record<string, [number, number, number, number]> = {
+  war: [255, 0, 0, 150],
+  natural_disaster: [255, 102, 0, 150],
+  weather: [0, 170, 255, 150],
+  geopolitical: [153, 0, 255, 150],
+  tariff: [255, 204, 0, 150],
+  infrastructure: [204, 204, 204, 150],
+};
+
 export function Map() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -108,10 +117,13 @@ export function Map() {
         id: 'heatmaps',
         data: SAMPLE_EVENTS,
         getPolygon: (d) => d.contour,
-        getFillColor: [255, 0, 0, 150],
-        getLineColor: [255, 255, 255, 50],
-        getLineWidth: 1,
+        getFillColor: (d) => EVENT_COLORS[d.type] || [128, 128, 128, 150],
+        getLineColor: [255, 255, 255, 80],
+        getLineWidth: 2,
+        lineWidthMinPixels: 1,
         opacity: 0.6,
+        filled: true,
+        stroked: true,
       }),
     ];
   }, [hoveredNode]);
