@@ -16,6 +16,26 @@ const SAMPLE_NODES = [
 
 type NodeData = (typeof SAMPLE_NODES)[0];
 
+const SAMPLE_CONNECTIONS = [
+  {
+    source: [120.9969, 24.7866] as [number, number], // TSMC
+    target: [127.1836, 37.2326] as [number, number], // Samsung
+    status: 'healthy',
+  },
+  {
+    source: [120.9969, 24.7866] as [number, number], // TSMC
+    target: [-111.8413, 33.3062] as [number, number], // Intel
+    status: 'healthy',
+  },
+  {
+    source: [5.4645, 51.4101] as [number, number], // ASML
+    target: [120.9969, 24.7866] as [number, number], // TSMC
+    status: 'healthy',
+  },
+];
+
+type ConnectionData = (typeof SAMPLE_CONNECTIONS)[0];
+
 export function Map() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -46,14 +66,15 @@ export function Map() {
           getRadius: hoveredNode?.name,
         },
       }),
-      new ArcLayer({
+      new ArcLayer<ConnectionData>({
         id: 'arcs',
-        data: [],
-        getSourcePosition: (d: { source: [number, number] }) => d.source,
-        getTargetPosition: (d: { target: [number, number] }) => d.target,
+        data: SAMPLE_CONNECTIONS,
+        getSourcePosition: (d) => d.source,
+        getTargetPosition: (d) => d.target,
         getSourceColor: [224, 224, 224, 200],
         getTargetColor: [224, 224, 224, 200],
         getWidth: 2,
+        widthMinPixels: 2,
       }),
     ];
   }, [hoveredNode]);
