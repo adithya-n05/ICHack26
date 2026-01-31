@@ -75,6 +75,7 @@ export function Map() {
         getTargetColor: [224, 224, 224, 200],
         getWidth: 2,
         widthMinPixels: 2,
+        getHeight: 0.5,
       }),
     ];
   }, [hoveredNode]);
