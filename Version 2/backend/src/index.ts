@@ -5,6 +5,7 @@ import { Server as SocketServer } from 'socket.io';
 import { supabase } from './lib/supabase';
 import { initializeEventEmitter } from './services/eventEmitter';
 import { startJobs } from './jobs';
+import companiesRouter from './routes/companies';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -36,6 +37,9 @@ initializeEventEmitter(io);
 
 app.use(cors());
 app.use(express.json());
+
+// API Routes
+app.use('/api/companies', companiesRouter);
 
 app.get('/health', async (req, res) => {
   try {
