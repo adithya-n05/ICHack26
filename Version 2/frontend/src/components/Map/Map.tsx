@@ -77,6 +77,7 @@ export function Map() {
   const map = useRef<mapboxgl.Map | null>(null);
   const deckOverlay = useRef<MapboxOverlay | null>(null);
   const [hoveredNode, setHoveredNode] = useState<NodeData | null>(null);
+  const [animationTime, setAnimationTime] = useState(0);
 
   const getLayers = useCallback(() => {
     return [
@@ -117,16 +118,33 @@ export function Map() {
         id: 'heatmaps',
         data: SAMPLE_EVENTS,
         getPolygon: (d) => d.contour,
-        getFillColor: (d) => EVENT_COLORS[d.type] || [128, 128, 128, 150],
+        getFillColor: (d) => {
+          const baseColor = EVENT_COLORS[d.type] || [128, 128, 128, 150];
+          const pulse = Math.sin(animationTime * 2) * 0.2 + 0.8;
+          return [baseColor[0], baseColor[1], baseColor[2], baseColor[3] * pulse];
+        },
         getLineColor: [255, 255, 255, 80],
         getLineWidth: 2,
         lineWidthMinPixels: 1,
         opacity: 0.6,
         filled: true,
         stroked: true,
+        updateTriggers: {
+          getFillColor: animationTime,
+        },
       }),
     ];
-  }, [hoveredNode]);
+  }, [hoveredNode, animationTime]);
+
+  useEffect(() => {
+    let animationFrameId: number;
+    const animate = () => {
+      setAnimationTime((t) => t + 0.02);
+      animationFrameId = requestAnimationFrame(animate);
+    };
+    animationFrameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrameId);
+  }, []);
 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
