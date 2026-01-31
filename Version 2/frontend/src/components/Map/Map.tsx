@@ -7,7 +7,11 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
 const SAMPLE_NODES = [
-  { position: [120.9969, 24.7866] as [number, number], name: 'TSMC Hsinchu' },
+  { position: [120.9969, 24.7866] as [number, number], name: 'TSMC Hsinchu', type: 'foundry' },
+  { position: [127.1836, 37.2326] as [number, number], name: 'Samsung Hwaseong', type: 'idm' },
+  { position: [121.4737, 31.2304] as [number, number], name: 'SMIC Shanghai', type: 'foundry' },
+  { position: [-111.8413, 33.3062] as [number, number], name: 'Intel Chandler', type: 'idm' },
+  { position: [5.4645, 51.4101] as [number, number], name: 'ASML Veldhoven', type: 'equipment' },
 ];
 
 export function Map() {
@@ -33,6 +37,8 @@ export function Map() {
           data: SAMPLE_NODES,
           getPosition: (d) => d.position,
           getRadius: 50000,
+          radiusMinPixels: 5,
+          radiusMaxPixels: 15,
           getFillColor: [0, 255, 255, 200],
         }),
       ];
