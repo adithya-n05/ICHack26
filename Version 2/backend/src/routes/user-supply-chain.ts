@@ -20,4 +20,37 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.post('/', async (req, res) => {
+  try {
+    const { company, suppliers, materials, connections } = req.body;
+
+    if (!company || !company.name) {
+      return res.status(400).json({ error: 'Company name is required' });
+    }
+
+    await supabase.from('user_supply_chains').delete().neq('id', '');
+
+    const { data, error } = await supabase
+      .from('user_supply_chains')
+      .insert({
+        company_name: company.name,
+        company_city: company.location?.city,
+        company_country: company.location?.country,
+        suppliers: suppliers || [],
+        materials: materials || [],
+        connections: connections || [],
+      })
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.status(201).json({ success: true, id: data.id });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
