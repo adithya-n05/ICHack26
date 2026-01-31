@@ -1,1 +1,50 @@
-[]
+[
+  {
+    "id": "conn-tsmc-nvidia",
+    "from_node_id": "tsmc-hsinchu",
+    "to_node_id": "nvidia-santaclara",
+    "transport_mode": "sea",
+    "status": "healthy",
+    "is_user_connection": false,
+    "materials": ["GPU wafers", "AI accelerator chips"],
+    "description": "TSMC manufactures Nvidia GPUs (A100, H100, etc.)",
+    "annual_volume_units": 500000000,
+    "lead_time_days": 45
+  },
+  {
+    "id": "conn-tsmc-amd",
+    "from_node_id": "tsmc-hsinchu",
+    "to_node_id": "amd-santaclara",
+    "transport_mode": "sea",
+    "status": "healthy",
+    "is_user_connection": false,
+    "materials": ["CPU wafers", "GPU wafers"],
+    "description": "TSMC manufactures AMD Ryzen CPUs and Radeon GPUs",
+    "annual_volume_units": 300000000,
+    "lead_time_days": 45
+  },
+  {
+    "id": "conn-samsung-qualcomm",
+    "from_node_id": "samsung-hwaseong",
+    "to_node_id": "qualcomm-sandiego",
+    "transport_mode": "sea",
+    "status": "healthy",
+    "is_user_connection": false,
+    "materials": ["Mobile SoC wafers"],
+    "description": "Samsung foundry manufactures some Qualcomm Snapdragon chips",
+    "annual_volume_units": 200000000,
+    "lead_time_days": 40
+  },
+  {
+    "id": "conn-asml-tsmc",
+    "from_node_id": "asml-veldhoven",
+    "to_node_id": "tsmc-hsinchu",
+    "transport_mode": "air",
+    "status": "healthy",
+    "is_user_connection": false,
+    "materials": ["EUV lithography machines", "DUV lithography machines"],
+    "description": "ASML supplies critical EUV machines to TSMC for advanced nodes",
+    "annual_volume_units": 50,
+    "lead_time_days": 365
+  }
+]
