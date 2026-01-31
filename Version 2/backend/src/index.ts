@@ -3,6 +3,7 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 import { supabase } from './lib/supabase';
+import { initializeEventEmitter } from './services/eventEmitter';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -28,6 +29,9 @@ io.on('connection', (socket) => {
 
 // Export io for use in other modules
 export { io };
+
+// Initialize event emitter with socket server
+initializeEventEmitter(io);
 
 app.use(cors());
 app.use(express.json());
