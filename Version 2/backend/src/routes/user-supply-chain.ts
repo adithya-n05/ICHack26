@@ -91,4 +91,21 @@ router.put('/', async (req, res) => {
   }
 });
 
+router.delete('/', async (req, res) => {
+  try {
+    const { error } = await supabase
+      .from('user_supply_chains')
+      .delete()
+      .neq('id', '');
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ success: true, message: 'Supply chain deleted' });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
