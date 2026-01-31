@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import { MapboxOverlay } from '@deck.gl/mapbox';
-import { ScatterplotLayer, ArcLayer } from '@deck.gl/layers';
+import { ScatterplotLayer, ArcLayer, PolygonLayer } from '@deck.gl/layers';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
@@ -35,6 +35,33 @@ const SAMPLE_CONNECTIONS = [
 ];
 
 type ConnectionData = (typeof SAMPLE_CONNECTIONS)[0];
+
+const SAMPLE_EVENTS = [
+  {
+    contour: [
+      [119, 23],
+      [122, 23],
+      [122, 26],
+      [119, 26],
+      [119, 23],
+    ] as [number, number][],
+    type: 'war',
+    name: 'Taiwan Strait Tensions',
+  },
+  {
+    contour: [
+      [139, 35],
+      [142, 35],
+      [142, 38],
+      [139, 38],
+      [139, 35],
+    ] as [number, number][],
+    type: 'natural_disaster',
+    name: 'Japan Earthquake Zone',
+  },
+];
+
+type EventData = (typeof SAMPLE_EVENTS)[0];
 
 export function Map() {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -76,6 +103,15 @@ export function Map() {
         getWidth: 2,
         widthMinPixels: 2,
         getHeight: 0.5,
+      }),
+      new PolygonLayer<EventData>({
+        id: 'heatmaps',
+        data: SAMPLE_EVENTS,
+        getPolygon: (d) => d.contour,
+        getFillColor: [255, 0, 0, 150],
+        getLineColor: [255, 255, 255, 50],
+        getLineWidth: 1,
+        opacity: 0.6,
       }),
     ];
   }, [hoveredNode]);
