@@ -37,9 +37,18 @@ export function Map() {
           data: SAMPLE_NODES,
           getPosition: (d) => d.position,
           getRadius: 50000,
-          radiusMinPixels: 5,
-          radiusMaxPixels: 15,
+          radiusMinPixels: 6,
+          radiusMaxPixels: 20,
           getFillColor: [0, 255, 255, 200],
+          stroked: true,
+          getLineColor: [0, 255, 255, 255],
+          lineWidthMinPixels: 2,
+          pickable: true,
+          onClick: (info) => {
+            if (info.object) {
+              console.log('Clicked node:', info.object);
+            }
+          },
         }),
       ];
       deckOverlay.current = new MapboxOverlay({ layers });
