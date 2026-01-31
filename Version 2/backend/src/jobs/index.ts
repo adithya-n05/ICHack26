@@ -88,4 +88,23 @@ export function startJobs() {
   });
 
   console.log('Cron jobs started');
+
+  // Initial fetch on startup
+  setTimeout(async () => {
+    console.log('Running initial data fetch...');
+
+    const [gdeltEvents, earthquakes, weatherAlerts, news] = await Promise.all([
+      fetchGdeltEvents(),
+      fetchEarthquakes(),
+      fetchWeatherAlerts(),
+      fetchNews(),
+    ]);
+
+    await saveEvents(gdeltEvents, 'GDELT');
+    await saveEvents(earthquakes, 'USGS');
+    await saveEvents(weatherAlerts, 'NOAA');
+    await saveNews(news);
+
+    console.log('Initial data fetch complete');
+  }, 5000); // Wait 5 seconds for server to fully start
 }
