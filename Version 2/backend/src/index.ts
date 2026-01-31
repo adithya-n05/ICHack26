@@ -8,6 +8,7 @@ import { startJobs } from './jobs';
 import companiesRouter from './routes/companies';
 import suppliersRouter from './routes/suppliers';
 import connectionsRouter from './routes/connections';
+import eventsRouter from './routes/events';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -44,6 +45,7 @@ app.use(express.json());
 app.use('/api/companies', companiesRouter);
 app.use('/api/suppliers', suppliersRouter);
 app.use('/api/connections', connectionsRouter);
+app.use('/api/events', eventsRouter);
 
 app.get('/health', async (req, res) => {
   try {
