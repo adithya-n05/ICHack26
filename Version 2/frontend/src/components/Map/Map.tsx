@@ -13,10 +13,10 @@ export function Map() {
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/streets-v12',
+      style: 'mapbox://styles/mapbox/dark-v11',
       projection: 'globe',
-      center: [0, 20],
-      zoom: 1.5,
+      center: [100, 30], // Asia-Pacific region
+      zoom: 2,
     });
 
     return () => {
