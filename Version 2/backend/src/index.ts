@@ -4,6 +4,7 @@ import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 import { supabase } from './lib/supabase';
 import { initializeEventEmitter } from './services/eventEmitter';
+import { startJobs } from './jobs';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -56,4 +57,5 @@ app.get('/health', async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  startJobs();
 });
