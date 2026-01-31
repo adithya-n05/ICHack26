@@ -1,0 +1,35 @@
+[
+  {
+    "id": "us-china-chips-2024",
+    "from_country": "CN",
+    "to_country": "US",
+    "product_category": "semiconductors",
+    "hs_codes": ["8541", "8542"],
+    "rate": 25,
+    "effective_date": "2024-01-01",
+    "description": "Section 301 tariffs on Chinese semiconductor imports",
+    "source_url": "https://ustr.gov/issue-areas/enforcement/section-301-investigations"
+  },
+  {
+    "id": "us-china-equipment-export",
+    "from_country": "US",
+    "to_country": "CN",
+    "product_category": "semiconductor equipment",
+    "hs_codes": ["8486"],
+    "rate": 0,
+    "effective_date": "2022-10-07",
+    "description": "Export controls on advanced chip manufacturing equipment to China",
+    "source_url": "https://www.bis.doc.gov/index.php/policy-guidance/semiconductor-manufacturing-items"
+  },
+  {
+    "id": "eu-china-ev-chips",
+    "from_country": "CN",
+    "to_country": "EU",
+    "product_category": "ev semiconductors",
+    "hs_codes": ["8541.40", "8542.31"],
+    "rate": 17.4,
+    "effective_date": "2024-10-01",
+    "description": "EU countervailing duties on Chinese EV-related semiconductors",
+    "source_url": "https://ec.europa.eu/trade/"
+  }
+]

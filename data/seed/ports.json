@@ -1,0 +1,74 @@
+[
+  {
+    "id": "port-kaohsiung",
+    "name": "Port of Kaohsiung",
+    "type": "port",
+    "location": { "lat": 22.6163, "lng": 120.2932 },
+    "city": "Kaohsiung",
+    "country": "Taiwan",
+    "country_code": "TW",
+    "description": "Taiwan's largest port - key hub for semiconductor exports",
+    "annual_teu": 9400000,
+    "specialties": ["Electronics", "Semiconductors", "Containers"]
+  },
+  {
+    "id": "port-busan",
+    "name": "Port of Busan",
+    "type": "port",
+    "location": { "lat": 35.1028, "lng": 129.0403 },
+    "city": "Busan",
+    "country": "South Korea",
+    "country_code": "KR",
+    "description": "South Korea's largest port - electronics and automotive exports",
+    "annual_teu": 21590000,
+    "specialties": ["Electronics", "Automotive", "Containers"]
+  },
+  {
+    "id": "port-longbeach",
+    "name": "Port of Long Beach",
+    "type": "port",
+    "location": { "lat": 33.7540, "lng": -118.2169 },
+    "city": "Long Beach",
+    "country": "USA",
+    "country_code": "US",
+    "description": "Major US West Coast port - gateway for Asian imports",
+    "annual_teu": 9200000,
+    "specialties": ["Consumer electronics", "Containers", "Automotive"]
+  },
+  {
+    "id": "port-rotterdam",
+    "name": "Port of Rotterdam",
+    "type": "port",
+    "location": { "lat": 51.9036, "lng": 4.4997 },
+    "city": "Rotterdam",
+    "country": "Netherlands",
+    "country_code": "NL",
+    "description": "Europe's largest port - key for ASML equipment exports",
+    "annual_teu": 14700000,
+    "specialties": ["Machinery", "Electronics", "Chemicals"]
+  },
+  {
+    "id": "port-shanghai",
+    "name": "Port of Shanghai",
+    "type": "port",
+    "location": { "lat": 31.2304, "lng": 121.4737 },
+    "city": "Shanghai",
+    "country": "China",
+    "country_code": "CN",
+    "description": "World's busiest port - major electronics hub",
+    "annual_teu": 47030000,
+    "specialties": ["Electronics", "Machinery", "Consumer goods"]
+  },
+  {
+    "id": "port-singapore",
+    "name": "Port of Singapore",
+    "type": "port",
+    "location": { "lat": 1.2644, "lng": 103.8220 },
+    "city": "Singapore",
+    "country": "Singapore",
+    "country_code": "SG",
+    "description": "Major transshipment hub connecting Asia to the world",
+    "annual_teu": 37200000,
+    "specialties": ["Transshipment", "Electronics", "Oil and gas"]
+  }
+]
