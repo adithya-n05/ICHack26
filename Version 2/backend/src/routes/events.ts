@@ -5,7 +5,7 @@ const router = Router();
 
 router.get('/', async (req, res) => {
   try {
-    const { type, severity, active } = req.query;
+    const { type, severity, active, minLat, maxLat, minLng, maxLng } = req.query;
 
     let query = supabase
       .from('events')
@@ -22,6 +22,14 @@ router.get('/', async (req, res) => {
 
     if (active === 'true') {
       query = query.is('end_date', null);
+    }
+
+    if (minLat && maxLat && minLng && maxLng) {
+      query = query
+        .gte('lat', parseFloat(minLat as string))
+        .lte('lat', parseFloat(maxLat as string))
+        .gte('lng', parseFloat(minLng as string))
+        .lte('lng', parseFloat(maxLng as string));
     }
 
     const { data, error } = await query;
