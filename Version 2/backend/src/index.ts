@@ -1,9 +1,33 @@
 import express from 'express';
 import cors from 'cors';
+import { createServer } from 'http';
+import { Server as SocketServer } from 'socket.io';
 import { supabase } from './lib/supabase';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Create HTTP server from Express app
+const server = createServer(app);
+
+// Create Socket.io server
+const io = new SocketServer(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
+  },
+});
+
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
+});
+
+// Export io for use in other modules
+export { io };
 
 app.use(cors());
 app.use(express.json());
@@ -26,6 +50,6 @@ app.get('/health', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
