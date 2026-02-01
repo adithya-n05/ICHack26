@@ -1757,11 +1757,11 @@ export function Map({
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
       {hoveredNode && (
-        <div className="absolute top-4 left-4 bg-bg-secondary px-3 py-2 rounded border border-border-color">
+        <div className="absolute top-4 left-4 bg-bg-secondary px-3 py-2 rounded shadow-[0_6px_18px_rgba(0,0,0,0.35)] ring-1 ring-white/5">
           <span className="text-accent-cyan font-mono text-sm">{hoveredNode.name}</span>
         </div>
       )}
-      <div className="absolute bottom-4 left-4 bg-bg-secondary/95 px-3 py-3 rounded border border-border-color">
+      <div className="absolute bottom-4 left-4 bg-bg-secondary/95 px-3 py-3 rounded shadow-[0_6px_18px_rgba(0,0,0,0.35)] ring-1 ring-white/5">
         <div className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
           Node Legend
         </div>

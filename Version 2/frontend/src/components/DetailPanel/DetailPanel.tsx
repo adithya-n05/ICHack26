@@ -83,7 +83,7 @@ export function DetailPanel({
     return (
       <aside
         data-testid="detail-panel"
-        className="absolute right-0 top-0 w-[350px] h-full bg-bg-secondary border-l border-border-color p-4 overflow-y-auto"
+        className="absolute right-0 top-0 w-[350px] h-full bg-bg-secondary p-4 overflow-y-auto shadow-[-8px_0_24px_rgba(0,0,0,0.35)] ring-1 ring-white/5"
       >
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-accent-cyan font-mono text-lg font-bold">
@@ -191,7 +191,7 @@ export function DetailPanel({
         )}
 
         {selectedConnection.is_user_connection && (
-          <div className="mt-4 px-3 py-2 bg-accent-cyan/20 border border-accent-cyan rounded">
+          <div className="mt-4 px-3 py-2 bg-accent-cyan/20 rounded ring-1 ring-accent-cyan/60">
             <span className="text-accent-cyan text-xs font-mono">YOUR SUPPLY CHAIN</span>
           </div>
         )}
@@ -234,7 +234,7 @@ export function DetailPanel({
   return (
     <aside
       data-testid="detail-panel"
-      className="absolute right-0 top-0 w-[350px] h-full bg-bg-secondary border-l border-border-color p-4 overflow-y-auto"
+      className="absolute right-0 top-0 w-[350px] h-full bg-bg-secondary p-4 overflow-y-auto shadow-[-8px_0_24px_rgba(0,0,0,0.35)] ring-1 ring-white/5"
     >
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-accent-cyan font-mono text-lg font-bold">
@@ -353,7 +353,7 @@ export function DetailPanel({
               {alternativeSuppliers.slice(0, 5).map((supplier) => (
                 <div
                   key={supplier.id}
-                  className="px-2 py-2 bg-bg-tertiary border border-border-color rounded"
+                className="px-2 py-2 bg-bg-tertiary rounded ring-1 ring-white/5"
                 >
                   <div className="text-text-primary text-sm font-mono">{supplier.name}</div>
                   <div className="text-text-secondary text-xs">
