@@ -32,13 +32,27 @@ export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
 
     return features.slice(0, 50).map((feature: any) => {
       const props = feature.properties;
-      // Get centroid of affected area
+      // Calculate centroid of affected area
       let lat = 0, lng = 0;
       if (feature.geometry?.coordinates) {
-        // Simplified: use first coordinate
-        const coords = feature.geometry.coordinates.flat(3);
-        lng = coords[0] || 0;
-        lat = coords[1] || 0;
+        // Flatten coordinates and calculate centroid
+        const coords = feature.geometry.coordinates.flat(Infinity) as number[];
+        // Coordinates come as [lng1, lat1, lng2, lat2, ...]
+        let sumLat = 0, sumLng = 0, count = 0;
+        for (let i = 0; i < coords.length - 1; i += 2) {
+          const lngVal = coords[i];
+          const latVal = coords[i + 1];
+          if (typeof lngVal === 'number' && typeof latVal === 'number' && 
+              !isNaN(lngVal) && !isNaN(latVal)) {
+            sumLng += lngVal;
+            sumLat += latVal;
+            count++;
+          }
+        }
+        if (count > 0) {
+          lng = sumLng / count;
+          lat = sumLat / count;
+        }
       }
 
       const severityMap: Record<string, number> = {

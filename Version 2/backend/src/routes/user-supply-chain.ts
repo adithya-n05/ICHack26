@@ -30,12 +30,16 @@ router.post('/', async (req, res) => {
 
     await supabase.from('user_supply_chains').delete().neq('id', '');
 
+    // Support both formats: { city, country } or { location: { city, country } }
+    const companyCity = company.city || company.location?.city || '';
+    const companyCountry = company.country || company.location?.country || '';
+
     const { data, error } = await supabase
       .from('user_supply_chains')
       .insert({
         company_name: company.name,
-        company_city: company.location?.city,
-        company_country: company.location?.country,
+        company_city: companyCity,
+        company_country: companyCountry,
         suppliers: suppliers || [],
         materials: materials || [],
         connections: connections || [],
@@ -66,12 +70,16 @@ router.put('/', async (req, res) => {
       return res.status(404).json({ error: 'No supply chain found. Use POST to create.' });
     }
 
+    // Support both formats: { city, country } or { location: { city, country } }
+    const companyCity = company?.city || company?.location?.city || '';
+    const companyCountry = company?.country || company?.location?.country || '';
+
     const { data, error } = await supabase
       .from('user_supply_chains')
       .update({
         company_name: company?.name,
-        company_city: company?.location?.city,
-        company_country: company?.location?.country,
+        company_city: companyCity,
+        company_country: companyCountry,
         suppliers: suppliers,
         materials: materials,
         connections: connections,
