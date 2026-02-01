@@ -30,7 +30,8 @@ router.get('/', async (req, res) => {
     const transformed = (data || []).map(item => ({
       id: item.id,
       title: item.title,
-      summary: item.summary,
+      description: item.description || item.summary || '',
+      summary: item.summary || item.description || '',
       url: item.source_url,
       source: item.source,
       category: item.category,

@@ -27,10 +27,26 @@ async function seed() {
   const tariffsPath = path.join(seedDir, 'tariffs.json');
 
   // Load data
-  const companies = JSON.parse(fs.readFileSync(companiesPath, 'utf-8'));
-  const ports = JSON.parse(fs.readFileSync(portsPath, 'utf-8'));
+  const companiesRaw = JSON.parse(fs.readFileSync(companiesPath, 'utf-8'));
+  const portsRaw = JSON.parse(fs.readFileSync(portsPath, 'utf-8'));
   const connections = JSON.parse(fs.readFileSync(connectionsPath, 'utf-8'));
   const tariffs = JSON.parse(fs.readFileSync(tariffsPath, 'utf-8'));
+
+  // Flatten location objects to lat/lng columns for database
+  const flattenLocation = (item: any) => {
+    if (item.location && typeof item.location === 'object') {
+      const { location, ...rest } = item;
+      return {
+        ...rest,
+        lat: location.lat,
+        lng: location.lng,
+      };
+    }
+    return item;
+  };
+
+  const companies = companiesRaw.map(flattenLocation);
+  const ports = portsRaw.map(flattenLocation);
 
   console.log(`Loaded ${companies.length} companies`);
   console.log(`Loaded ${ports.length} ports`);
