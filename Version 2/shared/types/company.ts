@@ -1,4 +1,4 @@
-import { GeoPoint } from './geo';
+import type { GeoPoint } from './geo';
 
 export type CompanyType =
   | 'foundry'

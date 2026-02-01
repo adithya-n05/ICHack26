@@ -1,4 +1,4 @@
-import { GeoPoint } from './geo';
+import type { GeoPoint } from './geo';
 
 export interface Supplier {
   id: string;

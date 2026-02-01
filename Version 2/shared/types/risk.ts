@@ -1,5 +1,5 @@
-import { GeoPoint } from './geo';
-import { ConnectionStatus } from './connection';
+import type { GeoPoint } from './geo';
+import type { ConnectionStatus } from './connection';
 
 /**
  * Risk assessment entity type

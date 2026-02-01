@@ -1,7 +1,7 @@
-import { GeoPoint } from './geo';
-import { Supplier } from './supplier';
-import { Material } from './material';
-import { Connection } from './connection';
+import type { GeoPoint } from './geo';
+import type { Supplier } from './supplier';
+import type { Material } from './material';
+import type { Connection } from './connection';
 
 export interface UserCompany {
   name: string;
