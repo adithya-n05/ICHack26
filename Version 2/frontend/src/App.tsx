@@ -5,6 +5,7 @@ import { NewsTicker } from './components/NewsTicker';
 import { SupplierForm } from './components/SupplierForm';
 import { socket } from './lib/socket';
 import { usePaths } from './hooks/usePaths';
+import { useAlternatives } from './hooks/useAlternatives';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -62,6 +63,14 @@ function App() {
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [mapRefreshKey, setMapRefreshKey] = useState(0);
   const { edges: pathEdges } = usePaths(selectedNode?.id ?? null);
+  const isAmberOrWorse = selectedConnection
+    ? ['monitoring', 'at-risk', 'critical', 'disrupted'].includes(selectedConnection.status)
+    : false;
+  const alternativeMaterial =
+    isAmberOrWorse
+      ? selectedConnection?.materials?.[0] ?? selectedConnection?.fromNode?.products?.[0] ?? null
+      : null;
+  const { alternatives } = useAlternatives(alternativeMaterial);
 
   // Fetch initial news
   useEffect(() => {
@@ -163,10 +172,12 @@ function App() {
           onNodeClick={handleNodeClick}
           onConnectionClick={handleConnectionClick}
           pathEdges={pathEdges}
+          alternativeSuppliers={isAmberOrWorse ? alternatives : []}
         />
         <DetailPanel
           selectedNode={selectedNode}
           selectedConnection={selectedConnection}
+          alternativeSuppliers={isAmberOrWorse ? alternatives : []}
           onClose={handleClosePanel}
         />
       </div>

@@ -25,9 +25,17 @@ interface Connection {
   toNode?: Company;
 }
 
+interface AlternativeSupplier {
+  id: string;
+  name: string;
+  country?: string;
+  city?: string;
+}
+
 interface DetailPanelProps {
   selectedNode: Company | null;
   selectedConnection: Connection | null;
+  alternativeSuppliers?: AlternativeSupplier[];
   onClose: () => void;
 }
 
@@ -52,9 +60,17 @@ const formatRevenue = (revenue?: number) => {
   return `$${revenue.toLocaleString()}`;
 };
 
-export function DetailPanel({ selectedNode, selectedConnection, onClose }: DetailPanelProps) {
+export function DetailPanel({
+  selectedNode,
+  selectedConnection,
+  alternativeSuppliers = [],
+  onClose,
+}: DetailPanelProps) {
   // Show connection panel if connection selected
   if (selectedConnection) {
+    const showAlternatives =
+      ['monitoring', 'at-risk', 'critical', 'disrupted'].includes(selectedConnection.status) &&
+      alternativeSuppliers.length > 0;
     return (
       <aside
         data-testid="detail-panel"
@@ -152,6 +168,33 @@ export function DetailPanel({ selectedNode, selectedConnection, onClose }: Detai
           <div className="mt-4 px-3 py-2 bg-accent-cyan/20 border border-accent-cyan rounded">
             <span className="text-accent-cyan text-xs font-mono">YOUR SUPPLY CHAIN</span>
           </div>
+        )}
+
+        {showAlternatives && (
+          <section className="mt-6">
+            <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+              Alternative Suppliers
+            </h3>
+            <div className="space-y-2">
+              {alternativeSuppliers.map((supplier) => (
+                <div
+                  key={supplier.id}
+                  className="flex items-center justify-between px-2 py-2 bg-bg-tertiary rounded"
+                >
+                  <div>
+                    <p className="text-text-primary text-sm font-bold">{supplier.name}</p>
+                    {supplier.country && (
+                      <p className="text-text-secondary text-xs">
+                        {supplier.city ? `${supplier.city}, ` : ''}
+                        {supplier.country}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-accent-green text-xs font-mono">ALT</span>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
       </aside>
     );

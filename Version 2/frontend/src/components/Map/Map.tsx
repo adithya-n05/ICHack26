@@ -44,6 +44,14 @@ interface PathEdge {
   status?: string;
 }
 
+interface AlternativeSupplier {
+  id: string;
+  name: string;
+  location?: { lat: number; lng: number };
+  lat?: number | null;
+  lng?: number | null;
+}
+
 interface GeoEvent {
   id: string;
   type: string;
@@ -59,15 +67,22 @@ interface MapProps {
   onNodeClick?: (node: Company) => void;
   onConnectionClick?: (connection: Connection & { fromNode?: Company; toNode?: Company }) => void;
   pathEdges?: PathEdge[];
+  alternativeSuppliers?: AlternativeSupplier[];
 }
 
-export function Map({ onNodeClick, onConnectionClick, pathEdges = [] }: MapProps) {
+export function Map({
+  onNodeClick,
+  onConnectionClick,
+  pathEdges = [],
+  alternativeSuppliers = [],
+}: MapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const nodesRef = useRef<Company[]>([]);
   const connectionsRef = useRef<Connection[]>([]);
   const eventsRef = useRef<GeoEvent[]>([]);
   const pathEdgesRef = useRef<PathEdge[]>([]);
+  const alternativeSuppliersRef = useRef<AlternativeSupplier[]>([]);
   
   // Pending events buffer for batching socket updates
   const pendingNewEvents = useRef<GeoEvent[]>([]);
@@ -113,6 +128,10 @@ export function Map({ onNodeClick, onConnectionClick, pathEdges = [] }: MapProps
   useEffect(() => {
     pathEdgesRef.current = pathEdges;
   }, [pathEdges]);
+
+  useEffect(() => {
+    alternativeSuppliersRef.current = alternativeSuppliers;
+  }, [alternativeSuppliers]);
 
   // Fetch events from API
   useEffect(() => {
@@ -279,6 +298,31 @@ export function Map({ onNodeClick, onConnectionClick, pathEdges = [] }: MapProps
       .filter((feature): feature is GeoJSON.Feature<GeoJSON.LineString> => feature !== null);
   }, [getNodePosition]);
 
+  const getAlternativeFeatures = useCallback(() => {
+    return alternativeSuppliersRef.current
+      .map((supplier) => {
+        const location = supplier.location
+          ? [supplier.location.lng, supplier.location.lat]
+          : typeof supplier.lat === 'number' && typeof supplier.lng === 'number'
+            ? [supplier.lng, supplier.lat]
+            : null;
+        if (!location) return null;
+        return {
+          type: 'Feature' as const,
+          id: supplier.id,
+          geometry: {
+            type: 'Point' as const,
+            coordinates: location,
+          },
+          properties: {
+            id: supplier.id,
+            name: supplier.name,
+          },
+        };
+      })
+      .filter((feature): feature is GeoJSON.Feature<GeoJSON.Point> => feature !== null);
+  }, []);
+
   const getEventPointFeatures = useCallback((eventsData: GeoEvent[] = eventsRef.current) => {
     return eventsData
       .map((event) => {
@@ -401,13 +445,24 @@ export function Map({ onNodeClick, onConnectionClick, pathEdges = [] }: MapProps
       const nodesSource = mapInstance.getSource('nodes') as mapboxgl.GeoJSONSource | undefined;
       const connectionsSource = mapInstance.getSource('connections') as mapboxgl.GeoJSONSource | undefined;
       const pathsSource = mapInstance.getSource('paths') as mapboxgl.GeoJSONSource | undefined;
+      const alternativesSource = mapInstance.getSource('alternatives') as
+        | mapboxgl.GeoJSONSource
+        | undefined;
 
       nodesSource?.setData(buildFeatureCollection(getNodeFeatures()));
       connectionsSource?.setData(buildFeatureCollection(getConnectionFeatures()));
       pathsSource?.setData(buildFeatureCollection(getPathFeatures()));
+      alternativesSource?.setData(buildFeatureCollection(getAlternativeFeatures()));
       updateEventSources(mapInstance);
     },
-    [buildFeatureCollection, getConnectionFeatures, getNodeFeatures, getPathFeatures, updateEventSources]
+    [
+      buildFeatureCollection,
+      getAlternativeFeatures,
+      getConnectionFeatures,
+      getNodeFeatures,
+      getPathFeatures,
+      updateEventSources,
+    ]
   );
 
   useEffect(() => {
@@ -505,6 +560,10 @@ export function Map({ onNodeClick, onConnectionClick, pathEdges = [] }: MapProps
       mapInstance.addSource('paths', {
         type: 'geojson',
         data: buildFeatureCollection(getPathFeatures()),
+      });
+      mapInstance.addSource('alternatives', {
+        type: 'geojson',
+        data: buildFeatureCollection(getAlternativeFeatures()),
       });
       mapInstance.addSource('events-points', {
         type: 'geojson',
@@ -682,6 +741,21 @@ export function Map({ onNodeClick, onConnectionClick, pathEdges = [] }: MapProps
             'line-width': ['case', ['boolean', ['get', 'is_user_connection'], false], 6, 4],
             'line-blur': 2.5,
             'line-opacity': 0.7,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
+          id: 'alternatives',
+          type: 'circle',
+          source: 'alternatives',
+          paint: {
+            'circle-radius': 6,
+            'circle-color': 'rgba(0, 255, 128, 0.95)',
+            'circle-stroke-color': 'rgba(0, 255, 128, 1)',
+            'circle-stroke-width': 1,
           },
         },
         beforeId
@@ -894,7 +968,7 @@ export function Map({ onNodeClick, onConnectionClick, pathEdges = [] }: MapProps
     if (map.current && map.current.isStyleLoaded()) {
       updateSourceData(map.current);
     }
-  }, [nodes, connections, pathEdges, updateSourceData]);
+  }, [nodes, connections, pathEdges, alternativeSuppliers, updateSourceData]);
 
   // Initial event load - only runs once when eventsLoaded becomes true
   useEffect(() => {
