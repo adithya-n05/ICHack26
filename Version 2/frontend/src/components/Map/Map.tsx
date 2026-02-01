@@ -259,6 +259,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
             type: event.type,
             severity: event.severity,
             title: event.title,
+            source: event.source,
           },
         };
       })
@@ -280,6 +281,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
           type: event.type,
           severity: event.severity,
           title: event.title,
+          source: event.source,
         },
       }));
   }, []);
@@ -297,6 +299,50 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
     if (!layers) return undefined;
     const labelLayer = layers.find((layer) => layer.type === 'symbol' && layer.layout?.['text-field']);
     return labelLayer?.id;
+  }, []);
+
+  const enhanceMapDetail = useCallback((mapInstance: mapboxgl.Map) => {
+    const layers = mapInstance.getStyle().layers || [];
+    const denseTextSize: mapboxgl.Expression = [
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      2, 9,
+      4, 10,
+      6, 12,
+      8, 13,
+      10, 14,
+      12, 16,
+    ];
+
+    layers.forEach((layer) => {
+      if (layer.type === 'symbol' && layer.layout?.['text-field']) {
+        mapInstance.setLayoutProperty(layer.id, 'text-allow-overlap', true);
+        mapInstance.setLayoutProperty(layer.id, 'text-ignore-placement', true);
+        mapInstance.setLayoutProperty(layer.id, 'icon-allow-overlap', true);
+        mapInstance.setLayoutProperty(layer.id, 'text-size', denseTextSize);
+        mapInstance.setPaintProperty(layer.id, 'text-color', '#b5bcc6');
+        mapInstance.setPaintProperty(layer.id, 'text-halo-color', '#0a0b0d');
+        mapInstance.setPaintProperty(layer.id, 'text-halo-width', 1);
+      }
+
+      if (layer.type === 'line') {
+        const idLower = layer.id.toLowerCase();
+        if (idLower.includes('road') || idLower.includes('street') || idLower.includes('bridge')) {
+          mapInstance.setPaintProperty(layer.id, 'line-opacity', 0.85);
+          mapInstance.setPaintProperty(layer.id, 'line-color', '#9aa3ad');
+          mapInstance.setPaintProperty(layer.id, 'line-width', [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            4, 0.4,
+            8, 0.8,
+            12, 1.4,
+            16, 3,
+          ]);
+        }
+      }
+    });
   }, []);
 
   // Update only event sources - called by debounced socket handler
@@ -333,7 +379,8 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
       style: 'mapbox://styles/mapbox/dark-v11',
       projection: 'globe',
       center: [100, 30],
-      zoom: 2,
+      zoom: 2.8,
+      pitch: 0,
     });
 
     map.current.once('load', () => {
@@ -347,7 +394,66 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
       const mapInstance = map.current;
       if (!mapInstance) return;
 
+      enhanceMapDetail(mapInstance);
       const beforeId = labelLayerId(mapInstance);
+
+      if (!mapInstance.getSource('mapbox-dem')) {
+        mapInstance.addSource('mapbox-dem', {
+          type: 'raster-dem',
+          url: 'mapbox://mapbox.terrain-rgb',
+          tileSize: 512,
+          maxzoom: 14,
+        });
+      }
+
+      if (!mapInstance.getLayer('terrain-hillshade')) {
+        mapInstance.addLayer(
+          {
+            id: 'terrain-hillshade',
+            type: 'hillshade',
+            source: 'mapbox-dem',
+            paint: {
+              'hillshade-exaggeration': 0.2,
+              'hillshade-shadow-color': '#0a0b0d',
+              'hillshade-highlight-color': '#1b1f24',
+              'hillshade-accent-color': '#111418',
+            },
+          },
+          beforeId
+        );
+      }
+
+      if (!mapInstance.getLayer('3d-buildings')) {
+        mapInstance.addLayer(
+          {
+            id: '3d-buildings',
+            source: 'composite',
+            'source-layer': 'building',
+            filter: ['==', 'extrude', 'true'],
+            type: 'fill-extrusion',
+            minzoom: 15,
+            paint: {
+              'fill-extrusion-color': '#1a1d22',
+              'fill-extrusion-opacity': 0.85,
+              'fill-extrusion-height': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                15, 0,
+                15.05, ['get', 'height'],
+              ],
+              'fill-extrusion-base': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                15, 0,
+                15.05, ['get', 'min_height'],
+              ],
+            },
+          },
+          beforeId
+        );
+      }
 
       mapInstance.addSource('nodes', {
         type: 'geojson',
@@ -371,7 +477,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
           id: 'events-heat',
           type: 'heatmap',
           source: 'events-points',
-          maxzoom: 8,
+          maxzoom: 12,
           paint: {
             'heatmap-weight': [
               'interpolate',
@@ -384,26 +490,36 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
               'interpolate',
               ['linear'],
               ['zoom'],
-              0, 0.6,
-              8, 2.5,
+              0, 0.5,
+              6, 1.8,
+              10, 3.2,
             ],
             'heatmap-color': [
               'interpolate',
               ['linear'],
               ['heatmap-density'],
-              0, 'rgba(0, 255, 255, 0)',
-              0.3, 'rgba(0, 255, 255, 0.35)',
-              0.6, 'rgba(0, 255, 255, 0.6)',
-              1, 'rgba(0, 255, 255, 0.85)',
+              0, 'rgba(255, 255, 255, 0)',
+              0.25, 'rgba(200, 200, 200, 0.25)',
+              0.5, 'rgba(160, 160, 160, 0.45)',
+              0.75, 'rgba(120, 120, 120, 0.65)',
+              1, 'rgba(90, 90, 90, 0.85)',
             ],
             'heatmap-radius': [
               'interpolate',
               ['linear'],
               ['zoom'],
-              0, 4,
-              8, 40,
+              0, 6,
+              6, 26,
+              10, 60,
             ],
-            'heatmap-opacity': 0.65,
+            'heatmap-opacity': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              2, 0.7,
+              10, 0.9,
+              12, 0.4,
+            ],
           },
         },
         beforeId
@@ -424,15 +540,30 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
               10, 8,
             ],
             'circle-color': [
-              'match',
-              ['get', 'type'],
-              'war', '#FF0000',
-              'natural_disaster', '#FF6600',
-              'weather', '#00AAFF',
-              'geopolitical', '#9900FF',
-              'tariff', '#FFCC00',
-              'infrastructure', '#CCCCCC',
-              '#E0E0E0',
+              'case',
+              ['==', ['get', 'source'], 'GDELT'],
+              [
+                'match',
+                ['get', 'type'],
+                'war', '#FF3366',
+                'natural_disaster', '#FF884D',
+                'weather', '#33CCFF',
+                'geopolitical', '#B266FF',
+                'tariff', '#FFD84D',
+                'infrastructure', '#BFBFBF',
+                '#E0E0E0',
+              ],
+              [
+                'match',
+                ['get', 'type'],
+                'war', '#FF0000',
+                'natural_disaster', '#FF6600',
+                'weather', '#00AAFF',
+                'geopolitical', '#9900FF',
+                'tariff', '#FFCC00',
+                'infrastructure', '#CCCCCC',
+                '#E0E0E0',
+              ],
             ],
             'circle-opacity': 0.9,
             'circle-stroke-color': '#0D0D0D',
@@ -449,15 +580,30 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
           source: 'events-polygons',
           paint: {
             'fill-color': [
-              'match',
-              ['get', 'type'],
-              'war', 'rgba(255, 0, 0, 0.4)',
-              'natural_disaster', 'rgba(255, 102, 0, 0.4)',
-              'weather', 'rgba(0, 170, 255, 0.35)',
-              'geopolitical', 'rgba(153, 0, 255, 0.35)',
-              'tariff', 'rgba(255, 204, 0, 0.35)',
-              'infrastructure', 'rgba(204, 204, 204, 0.35)',
-              'rgba(128, 128, 128, 0.35)',
+              'case',
+              ['==', ['get', 'source'], 'GDELT'],
+              [
+                'match',
+                ['get', 'type'],
+                'war', 'rgba(255, 51, 102, 0.4)',
+                'natural_disaster', 'rgba(255, 136, 77, 0.4)',
+                'weather', 'rgba(51, 204, 255, 0.35)',
+                'geopolitical', 'rgba(178, 102, 255, 0.35)',
+                'tariff', 'rgba(255, 216, 77, 0.35)',
+                'infrastructure', 'rgba(191, 191, 191, 0.35)',
+                'rgba(128, 128, 128, 0.35)',
+              ],
+              [
+                'match',
+                ['get', 'type'],
+                'war', 'rgba(255, 0, 0, 0.4)',
+                'natural_disaster', 'rgba(255, 102, 0, 0.4)',
+                'weather', 'rgba(0, 170, 255, 0.35)',
+                'geopolitical', 'rgba(153, 0, 255, 0.35)',
+                'tariff', 'rgba(255, 204, 0, 0.35)',
+                'infrastructure', 'rgba(204, 204, 204, 0.35)',
+                'rgba(128, 128, 128, 0.35)',
+              ],
             ],
             'fill-opacity': 0.6,
           },
