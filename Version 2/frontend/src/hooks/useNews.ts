@@ -20,25 +20,36 @@ export function useNews(limit: number = 20) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     // Fetch initial news
     fetch(`${API_URL}/api/news?limit=${limit}`)
       .then((res) => res.json())
       .then((data) => {
-        setNews(data);
-        setLoading(false);
+        if (isMounted) {
+          setNews(Array.isArray(data) ? data : []);
+          setLoading(false);
+        }
       })
       .catch((err) => {
-        setError(err.message);
-        setLoading(false);
+        if (isMounted) {
+          setError(err.message);
+          setLoading(false);
+        }
       });
 
-    // Listen for real-time updates
-    socket.on('new-news', (newsItem: NewsItem) => {
-      setNews((prev) => [newsItem, ...prev.slice(0, limit - 1)]);
-    });
+    // Listen for real-time updates with named handler
+    const handleNewNews = (newsItem: NewsItem) => {
+      if (isMounted && newsItem?.id && newsItem?.title) {
+        setNews((prev) => [newsItem, ...prev.slice(0, limit - 1)]);
+      }
+    };
+
+    socket.on('new-news', handleNewNews);
 
     return () => {
-      socket.off('new-news');
+      isMounted = false;
+      socket.off('new-news', handleNewNews);
     };
   }, [limit]);
 

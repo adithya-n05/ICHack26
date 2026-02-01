@@ -74,13 +74,26 @@ function App() {
 
   // Listen for real-time news updates
   useEffect(() => {
-    socket.on('new-news', (items: NewsItem[]) => {
-      console.log('Received new news:', items.length);
-      setNews(prev => [...items, ...prev].slice(0, 50));
-    });
+    const handleNewNews = (items: NewsItem | NewsItem[]) => {
+      // Handle undefined/null
+      if (!items) return;
+      
+      // Normalize to array
+      const newsArray = Array.isArray(items) ? items : [items];
+      
+      // Filter out invalid items
+      const validNews = newsArray.filter(item => item && item.id && item.title);
+      
+      if (validNews.length > 0) {
+        console.log('Received new news:', validNews.length);
+        setNews(prev => [...validNews, ...prev].slice(0, 50));
+      }
+    };
+
+    socket.on('new-news', handleNewNews);
 
     return () => {
-      socket.off('new-news');
+      socket.off('new-news', handleNewNews);
     };
   }, []);
 
