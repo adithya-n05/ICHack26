@@ -15,11 +15,14 @@ const demoNewsItems = [
 ];
 
 const demoNode = {
-  name: 'TSMC Hsinchu',
-  type: 'Foundry',
-  city: 'Hsinchu',
-  country: 'Taiwan',
+  id: "demo",
+  name: "Demo Company",
+  type: "HQ",
+  city: "Paris",
+  country: "France",
+  location: { lat: 48.8566, lng: 2.3522 },
 };
+
 
 function App() {
   const [showDetail, setShowDetail] = useState(false);
@@ -80,8 +83,9 @@ function App() {
 
       {showDetail && (
         <DetailPanel
-          selectedNode={demoNode}
-          onClose={() => setShowDetail(false)}
+        selectedNode={demoNode}
+        selectedConnection={null}
+        onClose={() => setShowDetail(false)}
         />
       )}
 

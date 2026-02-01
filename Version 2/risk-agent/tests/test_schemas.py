@@ -17,7 +17,15 @@ def test_risk_assessment_schema():
         ],
         alternatives={
             "suppliers": [],
-            "routes": [{"hub_id": "hub-789", "name": "Port of Busan"}]
+            "routes": [
+                {
+                    "id": "hub-789",
+                    "name": "Port of Busan",
+                    "type": "route",
+                    "reason": "Reroute via unaffected hub",
+                    "confidence": 0.7,
+                }
+            ],
         }
     )
 
