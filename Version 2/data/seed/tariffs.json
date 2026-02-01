@@ -1,0 +1,32 @@
+[
+  {
+    "id": "us-china-chips-2024",
+    "from_country": "CN",
+    "to_country": "US",
+    "product_category": "semiconductors",
+    "rate": 25.0,
+    "description": "US tariffs on Chinese semiconductor imports",
+    "effective_date": "2024-01-01T00:00:00Z",
+    "source": "USTR"
+  },
+  {
+    "id": "us-china-equipment-export",
+    "from_country": "US",
+    "to_country": "CN",
+    "product_category": "semiconductor_equipment",
+    "rate": 100.0,
+    "description": "US export restrictions on advanced chip equipment to China",
+    "effective_date": "2022-10-07T00:00:00Z",
+    "source": "BIS"
+  },
+  {
+    "id": "eu-china-ev-chips",
+    "from_country": "CN",
+    "to_country": "EU",
+    "product_category": "ev_components",
+    "rate": 17.4,
+    "description": "EU tariffs on Chinese EV components including chips",
+    "effective_date": "2024-07-04T00:00:00Z",
+    "source": "European Commission"
+  }
+]

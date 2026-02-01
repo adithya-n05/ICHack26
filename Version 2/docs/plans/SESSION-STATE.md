@@ -29,6 +29,7 @@ Building "Sentinel-Zero" - a geopolitical trade shock predictor for supply chain
 | `2026-01-31-sentinel-zero-phase1-api.md` | ✅ DONE | 29 API Endpoints tasks (A1-A29) |
 | `2026-01-31-sentinel-zero-phase1-external.md` | ✅ DONE | 26 External Data tasks (E1-E26) |
 | `2026-01-31-sentinel-zero-phase1-data.md` | ❌ TODO | 30 Data Seeding tasks (D1-D30) |
+| `2026-01-31-sentinel-zero-phase2-integration.md` | ✅ DONE | 14 Integration tasks (I1-I14) |
 | `vectorized-beaming-twilight.md` | Combined plan | Has Playwright E2E (PW1-PW11) |
 
 ---
@@ -38,9 +39,9 @@ Building "Sentinel-Zero" - a geopolitical trade shock predictor for supply chain
 ### Phase 1 (Separate Files for Parallel Execution)
 - **Data Seeding (D1-D30)** - Need to create `phase1-data.md`
 
-### Later Phases (Can use combined plan file)
-- Phase 2: Integration (I1-I14)
-- Phase 3: Advanced Features (AF1-AF12)
+### Later Phases
+- ✅ Phase 2: Integration (I1-I14) - `phase2-integration.md`
+- Phase 3: Advanced Features (AF1-AF12) - Can use combined plan or create separate file
 - Phase 4: E2E Testing with Playwright (PW1-PW11) - Already in combined plan
 
 ---
