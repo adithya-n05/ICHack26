@@ -4,6 +4,7 @@ import { DetailPanel } from './components/DetailPanel';
 import { NewsTicker } from './components/NewsTicker';
 import { SupplierForm } from './components/SupplierForm';
 import { socket } from './lib/socket';
+import { usePaths } from './hooks/usePaths';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -60,6 +61,7 @@ function App() {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [mapRefreshKey, setMapRefreshKey] = useState(0);
+  const { edges: pathEdges } = usePaths(selectedNode?.id ?? null);
 
   // Fetch initial news
   useEffect(() => {
@@ -160,6 +162,7 @@ function App() {
           key={mapRefreshKey}
           onNodeClick={handleNodeClick}
           onConnectionClick={handleConnectionClick}
+          pathEdges={pathEdges}
         />
         <DetailPanel
           selectedNode={selectedNode}

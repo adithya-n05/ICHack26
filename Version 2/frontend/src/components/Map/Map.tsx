@@ -37,6 +37,13 @@ interface Connection {
   lead_time_days?: number;
 }
 
+interface PathEdge {
+  id: string;
+  fromNodeId: string;
+  toNodeId: string;
+  status?: string;
+}
+
 interface GeoEvent {
   id: string;
   type: string;
@@ -51,14 +58,16 @@ interface GeoEvent {
 interface MapProps {
   onNodeClick?: (node: Company) => void;
   onConnectionClick?: (connection: Connection & { fromNode?: Company; toNode?: Company }) => void;
+  pathEdges?: PathEdge[];
 }
 
-export function Map({ onNodeClick, onConnectionClick }: MapProps) {
+export function Map({ onNodeClick, onConnectionClick, pathEdges = [] }: MapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const nodesRef = useRef<Company[]>([]);
   const connectionsRef = useRef<Connection[]>([]);
   const eventsRef = useRef<GeoEvent[]>([]);
+  const pathEdgesRef = useRef<PathEdge[]>([]);
   
   // Pending events buffer for batching socket updates
   const pendingNewEvents = useRef<GeoEvent[]>([]);
@@ -100,6 +109,10 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
   useEffect(() => {
     connectionsRef.current = connections;
   }, [connections]);
+
+  useEffect(() => {
+    pathEdgesRef.current = pathEdges;
+  }, [pathEdges]);
 
   // Fetch events from API
   useEffect(() => {
@@ -242,6 +255,30 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
       .filter((feature): feature is GeoJSON.Feature<GeoJSON.LineString> => feature !== null);
   }, [connections, getNodePosition]);
 
+  const getPathFeatures = useCallback(() => {
+    return pathEdgesRef.current
+      .map((edge) => {
+        const from = getNodePosition(edge.fromNodeId);
+        const to = getNodePosition(edge.toNodeId);
+        if (!from || !to) return null;
+        return {
+          type: 'Feature' as const,
+          id: edge.id,
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: [from, to],
+          },
+          properties: {
+            id: edge.id,
+            status: edge.status,
+            from_node_id: edge.fromNodeId,
+            to_node_id: edge.toNodeId,
+          },
+        };
+      })
+      .filter((feature): feature is GeoJSON.Feature<GeoJSON.LineString> => feature !== null);
+  }, [getNodePosition]);
+
   const getEventPointFeatures = useCallback((eventsData: GeoEvent[] = eventsRef.current) => {
     return eventsData
       .map((event) => {
@@ -363,12 +400,14 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
     (mapInstance: mapboxgl.Map) => {
       const nodesSource = mapInstance.getSource('nodes') as mapboxgl.GeoJSONSource | undefined;
       const connectionsSource = mapInstance.getSource('connections') as mapboxgl.GeoJSONSource | undefined;
+      const pathsSource = mapInstance.getSource('paths') as mapboxgl.GeoJSONSource | undefined;
 
       nodesSource?.setData(buildFeatureCollection(getNodeFeatures()));
       connectionsSource?.setData(buildFeatureCollection(getConnectionFeatures()));
+      pathsSource?.setData(buildFeatureCollection(getPathFeatures()));
       updateEventSources(mapInstance);
     },
-    [buildFeatureCollection, getConnectionFeatures, getNodeFeatures, updateEventSources]
+    [buildFeatureCollection, getConnectionFeatures, getNodeFeatures, getPathFeatures, updateEventSources]
   );
 
   useEffect(() => {
@@ -462,6 +501,10 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
       mapInstance.addSource('connections', {
         type: 'geojson',
         data: buildFeatureCollection(getConnectionFeatures()),
+      });
+      mapInstance.addSource('paths', {
+        type: 'geojson',
+        data: buildFeatureCollection(getPathFeatures()),
       });
       mapInstance.addSource('events-points', {
         type: 'geojson',
@@ -646,6 +689,34 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
 
       mapInstance.addLayer(
         {
+          id: 'paths-glow',
+          type: 'line',
+          source: 'paths',
+          layout: {
+            'line-cap': 'round',
+            'line-join': 'round',
+          },
+          paint: {
+            'line-color': [
+              'match',
+              ['get', 'status'],
+              'healthy', 'rgba(224, 224, 224, 0.75)',
+              'monitoring', 'rgba(255, 204, 0, 0.85)',
+              'at-risk', 'rgba(255, 102, 0, 0.85)',
+              'critical', 'rgba(255, 0, 0, 0.85)',
+              'disrupted', 'rgba(153, 0, 0, 0.85)',
+              'rgba(200, 200, 200, 0.75)',
+            ],
+            'line-width': 6,
+            'line-blur': 2.5,
+            'line-opacity': 0.8,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
           id: 'connections',
           type: 'line',
           source: 'connections',
@@ -671,6 +742,33 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
             ],
             'line-width': ['case', ['boolean', ['get', 'is_user_connection'], false], 2.5, 1.5],
             'line-opacity': 0.9,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
+          id: 'paths',
+          type: 'line',
+          source: 'paths',
+          layout: {
+            'line-cap': 'round',
+            'line-join': 'round',
+          },
+          paint: {
+            'line-color': [
+              'match',
+              ['get', 'status'],
+              'healthy', 'rgba(224, 224, 224, 1)',
+              'monitoring', 'rgba(255, 204, 0, 1)',
+              'at-risk', 'rgba(255, 102, 0, 1)',
+              'critical', 'rgba(255, 0, 0, 1)',
+              'disrupted', 'rgba(153, 0, 0, 1)',
+              'rgba(220, 220, 220, 1)',
+            ],
+            'line-width': 2.75,
+            'line-opacity': 0.95,
           },
         },
         beforeId
@@ -796,7 +894,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
     if (map.current && map.current.isStyleLoaded()) {
       updateSourceData(map.current);
     }
-  }, [nodes, connections, updateSourceData]);
+  }, [nodes, connections, pathEdges, updateSourceData]);
 
   // Initial event load - only runs once when eventsLoaded becomes true
   useEffect(() => {
