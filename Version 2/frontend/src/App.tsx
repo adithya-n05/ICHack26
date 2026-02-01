@@ -1,91 +1,172 @@
-import { useState } from 'react';
-import { Header } from './components/Header';
-import { LayerControlPanel } from './components/LayerControlPanel';
+import { useState, useEffect } from 'react';
+import { Map } from './components/Map';
 import { DetailPanel } from './components/DetailPanel';
 import { NewsTicker } from './components/NewsTicker';
-import { NodePopup } from './components/NodePopup';
 import { SupplierForm } from './components/SupplierForm';
+import { socket } from './lib/socket';
 
-// Demo data
-const demoNewsItems = [
-  { id: '1', title: 'Taiwan earthquake affects TSMC production', source: 'Reuters', category: 'disaster' as const },
-  { id: '2', title: 'US-China tariffs increased on semiconductors', source: 'Bloomberg', category: 'trade' as const },
-  { id: '3', title: 'Samsung announces new fab in Texas', source: 'WSJ', category: 'industry' as const },
-  { id: '4', title: 'Port of Shanghai reports delays', source: 'SCMP', category: 'infrastructure' as const },
-];
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-const demoNode = {
-  name: 'TSMC Hsinchu',
-  type: 'Foundry',
-  city: 'Hsinchu',
-  country: 'Taiwan',
+interface Company {
+  id: string;
+  name: string;
+  type: string;
+  location: { lat: number; lng: number };
+  city: string;
+  country: string;
+  description?: string;
+  products?: string[];
+  annual_revenue_usd?: number;
+  employees?: number;
+}
+
+interface MapCompany extends Omit<Company, 'location'> {
+  location?: { lat: number; lng: number };
+  lat?: number | null;
+  lng?: number | null;
+}
+
+interface Connection {
+  id: string;
+  from_node_id: string;
+  to_node_id: string;
+  transport_mode: string;
+  status: string;
+  is_user_connection: boolean;
+  materials?: string[];
+  description?: string;
+  lead_time_days?: number;
+  fromNode?: Company;
+  toNode?: Company;
+}
+
+type MapConnection = Omit<Connection, 'fromNode' | 'toNode'> & {
+  fromNode?: MapCompany;
+  toNode?: MapCompany;
 };
 
+interface NewsItem {
+  id: string;
+  title: string;
+  source: string;
+  url?: string;
+  publishedAt?: string;
+  category?: string;
+}
+
 function App() {
-  const [showDetail, setShowDetail] = useState(false);
-  const [showPopup, setShowPopup] = useState(false);
-  const [showForm, setShowForm] = useState(false);
+  const [selectedNode, setSelectedNode] = useState<Company | null>(null);
+  const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [showSupplierForm, setShowSupplierForm] = useState(false);
+  const [mapRefreshKey, setMapRefreshKey] = useState(0);
+
+  // Fetch initial news
+  useEffect(() => {
+    fetch(`${API_URL}/api/news`)
+      .then(res => res.json())
+      .then(data => {
+        console.log('Loaded news:', data.length);
+        setNews(data);
+      })
+      .catch(err => console.error('Failed to load news:', err));
+  }, []);
+
+  // Listen for real-time news updates
+  useEffect(() => {
+    socket.on('new-news', (items: NewsItem[]) => {
+      console.log('Received new news:', items.length);
+      setNews(prev => [...items, ...prev].slice(0, 50));
+    });
+
+    return () => {
+      socket.off('new-news');
+    };
+  }, []);
+
+  const normalizeCompany = (node: MapCompany): Company | null => {
+    if (node.location) {
+      return { ...node, location: node.location };
+    }
+    if (typeof node.lat === 'number' && typeof node.lng === 'number') {
+      return { ...node, location: { lat: node.lat, lng: node.lng } };
+    }
+    return null;
+  };
+
+  const handleNodeClick = (node: MapCompany) => {
+    const normalizedNode = normalizeCompany(node);
+    if (!normalizedNode) {
+      console.warn('Skipping node without location:', node.id);
+      return;
+    }
+    console.log('Node clicked:', node.name);
+    setSelectedConnection(null);
+    setSelectedNode(normalizedNode);
+  };
+
+  const handleConnectionClick = (connection: MapConnection) => {
+    const fromNode = connection.fromNode ? normalizeCompany(connection.fromNode) ?? undefined : undefined;
+    const toNode = connection.toNode ? normalizeCompany(connection.toNode) ?? undefined : undefined;
+    console.log('Connection clicked:', connection.id);
+    setSelectedNode(null);
+    setSelectedConnection({
+      ...connection,
+      fromNode,
+      toNode,
+    });
+  };
+
+  const handleClosePanel = () => {
+    setSelectedNode(null);
+    setSelectedConnection(null);
+  };
+
+  const handleSupplierFormSuccess = () => {
+    setShowSupplierForm(false);
+    // Trigger map refresh by incrementing key
+    setMapRefreshKey(k => k + 1);
+  };
 
   return (
-    <div className="h-screen bg-bg-primary overflow-hidden">
-      <Header />
-
-      <LayerControlPanel onLayerChange={(layers) => console.log('Layers:', layers)} />
+    <div className="h-screen w-screen bg-bg-primary flex flex-col">
+      {/* Header with Add Supply Chain button */}
+      <header className="h-14 bg-bg-secondary border-b border-border-color flex items-center justify-between px-4">
+        <h1 className="text-accent-cyan font-mono text-lg font-bold">SENTINEL ZERO</h1>
+        <button
+          onClick={() => setShowSupplierForm(true)}
+          className="px-3 py-1 bg-accent-cyan text-bg-primary rounded font-mono text-sm hover:opacity-90"
+        >
+          + Add Supply Chain
+        </button>
+      </header>
 
       {/* Main content area */}
-      <div className="absolute left-48 top-10 right-0 bottom-12 p-4">
-        <h2 className="text-text-primary font-mono mb-4">UI Components Demo</h2>
-
-        <div className="flex gap-4 mb-4">
-          <button
-            onClick={() => setShowDetail(!showDetail)}
-            className="px-4 py-2 bg-accent-cyan text-bg-primary rounded font-mono text-sm"
-          >
-            Toggle Detail Panel
-          </button>
-          <button
-            onClick={() => setShowPopup(!showPopup)}
-            className="px-4 py-2 bg-accent-green text-bg-primary rounded font-mono text-sm"
-          >
-            Toggle Node Popup
-          </button>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="px-4 py-2 bg-accent-orange text-bg-primary rounded font-mono text-sm"
-          >
-            Toggle Supplier Form
-          </button>
-        </div>
-
-        {showForm && (
-          <div className="mt-4">
-            <SupplierForm onSubmit={(data) => console.log('Form submitted:', data)} />
-          </div>
-        )}
+      <div className="flex-1 relative">
+        <Map
+          key={mapRefreshKey}
+          onNodeClick={handleNodeClick}
+          onConnectionClick={handleConnectionClick}
+        />
+        <DetailPanel
+          selectedNode={selectedNode}
+          selectedConnection={selectedConnection}
+          onClose={handleClosePanel}
+        />
       </div>
 
-      {showPopup && (
-        <NodePopup
-          node={demoNode}
-          x={400}
-          y={300}
-          onViewDetails={() => {
-            setShowPopup(false);
-            setShowDetail(true);
-          }}
-          onViewAlternatives={() => console.log('View alternatives')}
-          onClose={() => setShowPopup(false)}
-        />
-      )}
+      {/* News ticker at bottom */}
+      <NewsTicker items={news} />
 
-      {showDetail && (
-        <DetailPanel
-          selectedNode={demoNode}
-          onClose={() => setShowDetail(false)}
-        />
+      {/* Supplier form modal */}
+      {showSupplierForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <SupplierForm
+            onSubmitSuccess={handleSupplierFormSuccess}
+            onClose={() => setShowSupplierForm(false)}
+          />
+        </div>
       )}
-
-      <NewsTicker items={demoNewsItems} />
     </div>
   );
 }
