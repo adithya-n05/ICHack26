@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Map } from './components/Map';
 import { DetailPanel } from './components/DetailPanel';
-import { NewsTicker } from './components/NewsTicker';
+import { NewsSidebar } from './components/NewsSidebar/NewsSidebar';
 import { SupplierForm } from './components/SupplierForm';
 import { socket } from './lib/socket';
 import { usePaths } from './hooks/usePaths';
@@ -316,15 +316,15 @@ function App() {
   return (
     <div className="h-screen w-screen bg-bg-primary flex flex-col">
       {/* Header with Add Supply Chain button */}
-      <header className="h-14 bg-bg-secondary border-b border-border-color flex items-center justify-between px-4">
+      <header className="h-14 bg-bg-secondary flex items-center justify-between px-4 shadow-[0_1px_12px_rgba(0,0,0,0.35)] ring-1 ring-white/5">
         <h1 className="text-accent-cyan font-mono text-lg font-bold">SENTINEL ZERO</h1>
         <div className="flex items-center gap-2">
           <button
             onClick={toggleConnectMode}
-            className={`px-3 py-1 rounded font-mono text-sm border transition ${
+            className={`px-3 py-1 rounded font-mono text-sm transition ring-1 ${
               connectMode
-                ? 'bg-accent-cyan/20 text-accent-cyan border-accent-cyan'
-                : 'bg-bg-tertiary text-text-primary border-border-color hover:border-accent-cyan/70'
+                ? 'bg-accent-cyan/20 text-accent-cyan ring-accent-cyan/60'
+                : 'bg-bg-tertiary text-text-primary ring-white/10 hover:ring-accent-cyan/50'
             }`}
           >
             {connectMode ? 'Connect Mode: On' : 'Connect Nodes'}
@@ -348,8 +348,9 @@ function App() {
           alternativeSuppliers={effectiveAlternativeSuppliers}
           userConnections={userConnections}
         />
+        <NewsSidebar items={news} />
         {connectMode && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-bg-secondary/95 border border-border-color px-4 py-3 rounded shadow-lg">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-bg-secondary/95 px-4 py-3 rounded shadow-lg ring-1 ring-white/5">
             <div className="text-accent-cyan text-[11px] font-mono uppercase tracking-wider">
               Connect Mode
             </div>
@@ -375,9 +376,6 @@ function App() {
           alternativesError={effectiveAlternativesError}
         />
       </div>
-
-      {/* News ticker at bottom */}
-      <NewsTicker items={news} />
 
       {/* Supplier form modal */}
       {showSupplierForm && (
