@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Map } from './components/Map';
 import { DetailPanel } from './components/DetailPanel';
 import { NewsTicker } from './components/NewsTicker';
 import { SupplierForm } from './components/SupplierForm';
 import { socket } from './lib/socket';
+import { usePaths } from './hooks/usePaths';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -40,6 +41,23 @@ interface Connection {
   toNode?: Company;
 }
 
+interface PathEdge {
+  id: string;
+  fromNodeId?: string;
+  toNodeId?: string;
+  from_node_id?: string;
+  to_node_id?: string;
+  transportMode?: string;
+  transport_mode?: string;
+  status: string;
+  isUserConnection?: boolean;
+  is_user_connection?: boolean;
+  materials?: string[];
+  description?: string;
+  leadTimeDays?: number;
+  lead_time_days?: number;
+}
+
 type MapConnection = Omit<Connection, 'fromNode' | 'toNode'> & {
   fromNode?: MapCompany;
   toNode?: MapCompany;
@@ -60,6 +78,17 @@ function App() {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [mapRefreshKey, setMapRefreshKey] = useState(0);
+  const { edges: pathEdges, loading: pathsLoading, error: pathsError } = usePaths(selectedNode?.id);
+  const [alternativeSuppliers, setAlternativeSuppliers] = useState<Company[]>([]);
+  const [alternativesLoading, setAlternativesLoading] = useState(false);
+  const [alternativesError, setAlternativesError] = useState<string | null>(null);
+  const firstAmberEdge = useMemo(() => {
+    if (!selectedNode || pathEdges.length === 0) return null;
+    const amberStatuses = new Set(['monitoring', 'at-risk', 'critical', 'disrupted']);
+    return pathEdges.find((edge) => amberStatuses.has(edge.status)) ?? null;
+  }, [pathEdges, selectedNode]);
+  const alternativeMaterial = firstAmberEdge?.materials?.[0];
+  const shouldFetchAlternatives = Boolean(selectedNode && firstAmberEdge && alternativeMaterial);
 
   // Fetch initial news
   useEffect(() => {
@@ -77,13 +106,13 @@ function App() {
     const handleNewNews = (items: NewsItem | NewsItem[]) => {
       // Handle undefined/null
       if (!items) return;
-      
+
       // Normalize to array
       const newsArray = Array.isArray(items) ? items : [items];
-      
+
       // Filter out invalid items
       const validNews = newsArray.filter(item => item && item.id && item.title);
-      
+
       if (validNews.length > 0) {
         console.log('Received new news:', validNews.length);
         setNews(prev => [...validNews, ...prev].slice(0, 50));
@@ -96,6 +125,64 @@ function App() {
       socket.off('new-news', handleNewNews);
     };
   }, []);
+
+  useEffect(() => {
+    if (pathsError) {
+      console.error('Failed to load paths:', pathsError);
+    }
+  }, [pathsError]);
+
+  useEffect(() => {
+    if (pathsLoading) {
+      console.log('Loading inferred paths...');
+    }
+  }, [pathsLoading]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!shouldFetchAlternatives || !alternativeMaterial) {
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const fetchAlternatives = async () => {
+      if (isMounted) {
+        setAlternativesLoading(true);
+        setAlternativesError(null);
+      }
+
+      try {
+        const res = await fetch(
+          `${API_URL}/api/alternatives?material=${encodeURIComponent(alternativeMaterial)}`
+        );
+        if (!res.ok) {
+          throw new Error(`Failed to load alternatives (${res.status})`);
+        }
+        const data = await res.json();
+        if (!isMounted) return;
+        setAlternativeSuppliers(Array.isArray(data) ? data : []);
+        setAlternativesLoading(false);
+      } catch (err) {
+        if (!isMounted) return;
+        setAlternativeSuppliers([]);
+        setAlternativesError((err as Error).message);
+        setAlternativesLoading(false);
+      }
+    };
+
+    fetchAlternatives();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [alternativeMaterial, shouldFetchAlternatives]);
+
+  const effectiveAlternativeSuppliers = shouldFetchAlternatives ? alternativeSuppliers : [];
+  const effectiveAlternativesLoading = shouldFetchAlternatives ? alternativesLoading : false;
+  const effectiveAlternativesError = shouldFetchAlternatives ? alternativesError : null;
+  const effectiveRiskyPathEdge = shouldFetchAlternatives ? firstAmberEdge : null;
 
   const normalizeCompany = (node: MapCompany): Company | null => {
     if (node.location) {
@@ -160,11 +247,17 @@ function App() {
           key={mapRefreshKey}
           onNodeClick={handleNodeClick}
           onConnectionClick={handleConnectionClick}
+          pathEdges={pathEdges as PathEdge[]}
+          alternativeSuppliers={effectiveAlternativeSuppliers}
         />
         <DetailPanel
           selectedNode={selectedNode}
           selectedConnection={selectedConnection}
           onClose={handleClosePanel}
+          alternativeSuppliers={effectiveAlternativeSuppliers}
+          riskyPathEdge={effectiveRiskyPathEdge}
+          alternativesLoading={effectiveAlternativesLoading}
+          alternativesError={effectiveAlternativesError}
         />
       </div>
 

@@ -25,10 +25,24 @@ interface Connection {
   toNode?: Company;
 }
 
+interface PathEdge {
+  id: string;
+  status: string;
+  fromNodeId?: string;
+  toNodeId?: string;
+  from_node_id?: string;
+  to_node_id?: string;
+  materials?: string[];
+}
+
 interface DetailPanelProps {
   selectedNode: Company | null;
   selectedConnection: Connection | null;
   onClose: () => void;
+  alternativeSuppliers?: Company[];
+  riskyPathEdge?: PathEdge | null;
+  alternativesLoading?: boolean;
+  alternativesError?: string | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -52,7 +66,15 @@ const formatRevenue = (revenue?: number) => {
   return `$${revenue.toLocaleString()}`;
 };
 
-export function DetailPanel({ selectedNode, selectedConnection, onClose }: DetailPanelProps) {
+export function DetailPanel({
+  selectedNode,
+  selectedConnection,
+  onClose,
+  alternativeSuppliers = [],
+  riskyPathEdge = null,
+  alternativesLoading = false,
+  alternativesError = null,
+}: DetailPanelProps) {
   // Show connection panel if connection selected
   if (selectedConnection) {
     return (
@@ -159,6 +181,8 @@ export function DetailPanel({ selectedNode, selectedConnection, onClose }: Detai
 
   // Show node panel if node selected
   if (!selectedNode) return null;
+  const showAlternatives =
+    alternativesLoading || Boolean(alternativesError) || alternativeSuppliers.length > 0;
 
   return (
     <aside
@@ -259,6 +283,53 @@ export function DetailPanel({ selectedNode, selectedConnection, onClose }: Detai
           <span className="text-text-primary text-sm">Healthy</span>
         </div>
       </section>
+
+      {showAlternatives && (
+        <section className="mb-4">
+          <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+            Alternative Suppliers
+          </h3>
+          {riskyPathEdge && (
+            <p className="text-text-secondary text-xs mb-2">
+              Trigger: {riskyPathEdge.fromNodeId || riskyPathEdge.from_node_id} →{' '}
+              {riskyPathEdge.toNodeId || riskyPathEdge.to_node_id} ({riskyPathEdge.status})
+            </p>
+          )}
+          {alternativesLoading && (
+            <p className="text-text-secondary text-xs">Loading alternatives...</p>
+          )}
+          {alternativesError && (
+            <p className="text-accent-orange text-xs">Failed to load alternatives.</p>
+          )}
+          {alternativeSuppliers.length > 0 && (
+            <div className="space-y-2">
+              {alternativeSuppliers.slice(0, 5).map((supplier) => (
+                <div
+                  key={supplier.id}
+                  className="px-2 py-2 bg-bg-tertiary border border-border-color rounded"
+                >
+                  <div className="text-text-primary text-sm font-mono">{supplier.name}</div>
+                  <div className="text-text-secondary text-xs">
+                    {supplier.city}, {supplier.country}
+                  </div>
+                  {supplier.products && supplier.products.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {supplier.products.slice(0, 3).map((product, i) => (
+                        <span
+                          key={i}
+                          className="px-2 py-0.5 bg-bg-primary text-text-secondary text-[10px] rounded"
+                        >
+                          {product}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
     </aside>
   );
 }
