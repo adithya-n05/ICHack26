@@ -21,32 +21,47 @@ export function useEvents() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     // Fetch initial events
     fetch(`${API_URL}/api/events`)
       .then((res) => res.json())
       .then((data) => {
-        setEvents(data);
-        setLoading(false);
+        if (isMounted) {
+          setEvents(data);
+          setLoading(false);
+        }
       })
       .catch((err) => {
-        setError(err.message);
-        setLoading(false);
+        if (isMounted) {
+          setError(err.message);
+          setLoading(false);
+        }
       });
 
-    // Listen for real-time updates
-    socket.on('new-event', (event: Event) => {
-      setEvents((prev) => [event, ...prev]);
-    });
+    // Named handlers for proper cleanup
+    const handleNewEvent = (event: Event) => {
+      if (isMounted) {
+        setEvents((prev) => [event, ...prev]);
+      }
+    };
 
-    socket.on('event-update', (updatedEvent: Event) => {
-      setEvents((prev) =>
-        prev.map((e) => (e.id === updatedEvent.id ? updatedEvent : e))
-      );
-    });
+    const handleEventUpdate = (updatedEvent: Event) => {
+      if (isMounted) {
+        setEvents((prev) =>
+          prev.map((e) => (e.id === updatedEvent.id ? updatedEvent : e))
+        );
+      }
+    };
+
+    // Listen for real-time updates
+    socket.on('new-event', handleNewEvent);
+    socket.on('event-update', handleEventUpdate);
 
     return () => {
-      socket.off('new-event');
-      socket.off('event-update');
+      isMounted = false;
+      socket.off('new-event', handleNewEvent);
+      socket.off('event-update', handleEventUpdate);
     };
   }, []);
 
