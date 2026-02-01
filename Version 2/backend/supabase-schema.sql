@@ -136,14 +136,14 @@ ALTER TABLE tariffs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE news ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_supply_chains ENABLE ROW LEVEL SECURITY;
 
--- Create policies to allow service role full access
-CREATE POLICY "Service role has full access to companies" ON companies FOR ALL USING (true);
-CREATE POLICY "Service role has full access to suppliers" ON suppliers FOR ALL USING (true);
-CREATE POLICY "Service role has full access to connections" ON connections FOR ALL USING (true);
-CREATE POLICY "Service role has full access to events" ON events FOR ALL USING (true);
-CREATE POLICY "Service role has full access to tariffs" ON tariffs FOR ALL USING (true);
-CREATE POLICY "Service role has full access to news" ON news FOR ALL USING (true);
-CREATE POLICY "Service role has full access to user_supply_chains" ON user_supply_chains FOR ALL USING (true);
+-- -- Create policies to allow service role full access
+-- CREATE POLICY "Service role has full access to companies" ON companies FOR ALL USING (true);
+-- CREATE POLICY "Service role has full access to suppliers" ON suppliers FOR ALL USING (true);
+-- CREATE POLICY "Service role has full access to connections" ON connections FOR ALL USING (true);
+-- CREATE POLICY "Service role has full access to events" ON events FOR ALL USING (true);
+-- CREATE POLICY "Service role has full access to tariffs" ON tariffs FOR ALL USING (true);
+-- CREATE POLICY "Service role has full access to news" ON news FOR ALL USING (true);
+-- CREATE POLICY "Service role has full access to user_supply_chains" ON user_supply_chains FOR ALL USING (true);
 
 -- Additional columns needed for seed data
 -- Add missing columns to companies table
@@ -152,12 +152,35 @@ ALTER TABLE companies ADD COLUMN IF NOT EXISTS annual_teu BIGINT; -- for ports (
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS employee_count INTEGER;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS founded_year INTEGER;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS website TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS node_type TEXT; -- company, factory, port, warehouse, hub, market
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS source TEXT; -- osm, curated, ports_index
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS region_code TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS taxonomy JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS primary_hs_code TEXT;
 
 -- Add missing columns to connections table
 ALTER TABLE connections ADD COLUMN IF NOT EXISTS annual_volume_units BIGINT;
 ALTER TABLE connections ADD COLUMN IF NOT EXISTS transport_mode TEXT; -- 'sea', 'air', 'land'
 ALTER TABLE connections ADD COLUMN IF NOT EXISTS lead_time_days INTEGER;
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS path_id TEXT;
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS sequence INTEGER;
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS cost_score DOUBLE PRECISION;
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS risk_score DOUBLE PRECISION;
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS tariff_cost DOUBLE PRECISION;
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS product_category TEXT;
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS is_path_edge BOOLEAN DEFAULT FALSE;
 
 -- Add missing columns to tariffs table
 ALTER TABLE tariffs ADD COLUMN IF NOT EXISTS hs_codes JSONB DEFAULT '[]'::jsonb; -- Harmonized System codes
 ALTER TABLE tariffs ADD COLUMN IF NOT EXISTS affected_products JSONB DEFAULT '[]'::jsonb;
+
+-- Supply paths table (path metadata)
+CREATE TABLE IF NOT EXISTS supply_paths (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  company_id TEXT REFERENCES companies(id),
+  product_category TEXT,
+  status TEXT DEFAULT 'active',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
