@@ -13,6 +13,7 @@ import tariffsRouter from './routes/tariffs';
 import newsRouter from './routes/news';
 import userSupplyChainRouter from './routes/user-supply-chain';
 import alternativesRouter from './routes/alternatives';
+import pathsRouter from './routes/paths';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -55,6 +56,7 @@ app.use('/api/tariffs', tariffsRouter);
 app.use('/api/news', newsRouter);
 app.use('/api/user-supply-chain', userSupplyChainRouter);
 app.use('/api/alternatives', alternativesRouter);
+app.use('/api/paths', pathsRouter);
 
 app.get('/health', async (req, res) => {
   try {
