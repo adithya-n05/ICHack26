@@ -10,7 +10,10 @@ router.get('/', async (req, res) => {
     let query = supabase
       .from('events')
       .select('*')
-      .order('start_date', { ascending: false });
+      .order('start_date', { ascending: false })
+      // Filter out events with invalid (0,0) coordinates
+      .not('lat', 'eq', 0)
+      .not('lng', 'eq', 0);
 
     if (type) {
       query = query.eq('type', type);
