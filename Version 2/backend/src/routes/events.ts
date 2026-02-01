@@ -38,7 +38,15 @@ router.get('/', async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
-    res.json(data || []);
+    // Transform to include location object for frontend compatibility
+    const transformed = (data || []).map((event: any) => ({
+      ...event,
+      location: { lat: event.lat, lng: event.lng },
+      startDate: event.start_date,
+      endDate: event.end_date,
+    }));
+
+    res.json(transformed);
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -57,7 +65,13 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Event not found' });
     }
 
-    res.json(data);
+    // Transform to include location object
+    res.json({
+      ...data,
+      location: { lat: data.lat, lng: data.lng },
+      startDate: data.start_date,
+      endDate: data.end_date,
+    });
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }
