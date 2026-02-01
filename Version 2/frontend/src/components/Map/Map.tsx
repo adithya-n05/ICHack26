@@ -2,6 +2,10 @@ import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { socket } from '../../lib/socket';
+import { createMapUpdateScheduler } from './mapUpdate';
+import { HEATMAP_LAYER_CONFIGS } from './heatmapLayerConfigs';
+import { buildHeatmapPopupHtml } from './heatmapPopup';
+import type { TariffHeatmapSummary } from '../TariffPanel/TariffPanel';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -186,6 +190,7 @@ interface GeoEvent {
   id: string;
   type: string;
   title: string;
+  description?: string;
   location?: { lat: number; lng: number };
   lat?: number | null;
   lng?: number | null;
@@ -193,12 +198,16 @@ interface GeoEvent {
   startDate?: string;
   endDate?: string;
   source?: string;
+  source_url?: string;
+  country?: string;
+  region?: string;
   polygon?: Array<{ lat: number; lng: number }>;
 }
 
 interface MapProps {
   onNodeClick?: (node: Company) => void;
   onConnectionClick?: (connection: Connection & { fromNode?: Company; toNode?: Company }) => void;
+  onTariffHeatmapClick?: (summary: TariffHeatmapSummary) => void;
   pathEdges?: PathEdge[];
   alternativeSuppliers?: AlternativeSupplier[];
   userConnections?: Connection[];
@@ -207,6 +216,7 @@ interface MapProps {
 export function Map({
   onNodeClick,
   onConnectionClick,
+  onTariffHeatmapClick,
   pathEdges = [],
   alternativeSuppliers = [],
   userConnections = [],
@@ -437,14 +447,6 @@ export function Map({
     if (title.includes('blizzard') || title.includes('snow')) return 'Blizzard';
     return formatEventType(event.type);
   }, [formatEventType]);
-
-  const extractMagnitudeFromTitle = useCallback((title?: string) => {
-    if (!title) return null;
-    const match = title.match(/m\s*([0-9]+(?:\.[0-9]+)?)/i);
-    if (!match) return null;
-    const value = Number(match[1]);
-    return Number.isFinite(value) ? value : null;
-  }, []);
 
   const formatEventDateRange = useCallback((startDate?: string, endDate?: string) => {
     if (!startDate && !endDate) return 'Date unavailable';
@@ -723,26 +725,15 @@ export function Map({
       let sumLat = 0;
       let sumLng = 0;
       let locationCount = 0;
-      let magnitudeSum = 0;
-      let magnitudeCount = 0;
       for (const event of merged) {
         const location = getEventPosition(event as GeoEvent);
         if (!location) continue;
         sumLat += location.lat;
         sumLng += location.lng;
         locationCount += 1;
-
-        if (classifyEventSubtype(event as GeoEvent) === 'Earthquake') {
-          const magnitude = extractMagnitudeFromTitle((event as GeoEvent).title);
-          if (typeof magnitude === 'number') {
-            magnitudeSum += magnitude;
-            magnitudeCount += 1;
-          }
-        }
       }
       const centerLat = locationCount ? sumLat / locationCount : null;
       const centerLng = locationCount ? sumLng / locationCount : null;
-      const averageMagnitude = magnitudeCount ? magnitudeSum / magnitudeCount : null;
 
       return {
         count,
@@ -753,10 +744,10 @@ export function Map({
         dateEnd: Number.isFinite(newest) ? new Date(newest).toISOString() : null,
         centerLat,
         centerLng,
-        averageMagnitude,
+        matchingEvents: within,
       };
     },
-    [classifyEventSubtype, extractMagnitudeFromTitle, getEventPosition, isRecentEvent, normalizeEventType],
+    [classifyEventSubtype, getEventPosition, isRecentEvent, normalizeEventType],
   );
 
   const closeSelectionPopup = useCallback(() => {
@@ -879,30 +870,34 @@ export function Map({
     (mapInstance: mapboxgl.Map) => {
       const eventsPointSource = mapInstance.getSource('events-points') as mapboxgl.GeoJSONSource | undefined;
       const eventsPolygonSource = mapInstance.getSource('events-polygons') as mapboxgl.GeoJSONSource | undefined;
-      const warHeatSource = mapInstance.getSource('events-heatmap-war') as mapboxgl.GeoJSONSource | undefined;
-      const naturalHeatSource = mapInstance.getSource('events-heatmap-natural') as mapboxgl.GeoJSONSource | undefined;
 
       const eventPoints = getEventPointFeatures();
       const eventPolygons = getEventPolygonFeatures();
-      const warHeatFeatures = getHeatmapEventPointFeatures(['war'], true);
-      const naturalHeatFeatures = getHeatmapEventPointFeatures(
-        ['natural_disaster', 'weather'],
-        false,
-        isRecentNaturalEvent,
-      );
+      const heatmapFeatures = HEATMAP_LAYER_CONFIGS.map((config) => ({
+        config,
+        features: getHeatmapEventPointFeatures(
+          config.types,
+          config.includeCustomWar,
+          config.recentWindow === 'natural' ? isRecentNaturalEvent : undefined,
+        ),
+      }));
 
       console.log('Heatmap sources', {
         events: eventsRef.current.length,
         eventPoints: eventPoints.length,
         eventPolygons: eventPolygons.length,
-        warHeat: warHeatFeatures.length,
-        naturalHeat: naturalHeatFeatures.length,
+        heatmaps: heatmapFeatures.reduce<Record<string, number>>((acc, entry) => {
+          acc[entry.config.id] = entry.features.length;
+          return acc;
+        }, {}),
       });
 
       eventsPointSource?.setData(buildFeatureCollection(eventPoints));
       eventsPolygonSource?.setData(buildFeatureCollection(eventPolygons));
-      warHeatSource?.setData(buildFeatureCollection(warHeatFeatures));
-      naturalHeatSource?.setData(buildFeatureCollection(naturalHeatFeatures));
+      heatmapFeatures.forEach(({ config, features }) => {
+        const heatSource = mapInstance.getSource(config.sourceId) as mapboxgl.GeoJSONSource | undefined;
+        heatSource?.setData(buildFeatureCollection(features));
+      });
     },
     [
       buildFeatureCollection,
@@ -942,6 +937,19 @@ export function Map({
       getPathFeatures,
       updateEventSources,
     ]
+  );
+
+  const updateSourceDataRef = useRef(updateSourceData);
+  useEffect(() => {
+    updateSourceDataRef.current = updateSourceData;
+  }, [updateSourceData]);
+
+  const updateSchedulerRef = useRef(
+    createMapUpdateScheduler(() => {
+      const mapInstance = map.current;
+      if (!mapInstance || !mapInstance.isStyleLoaded()) return;
+      updateSourceDataRef.current(mapInstance);
+    }),
   );
 
   useEffect(() => {
@@ -1056,15 +1064,17 @@ export function Map({
         type: 'geojson',
         data: buildFeatureCollection(getEventPolygonFeatures()),
       });
-      mapInstance.addSource('events-heatmap-war', {
-        type: 'geojson',
-        data: buildFeatureCollection(getHeatmapEventPointFeatures(['war'], true)),
-      });
-      mapInstance.addSource('events-heatmap-natural', {
-        type: 'geojson',
-        data: buildFeatureCollection(
-          getHeatmapEventPointFeatures(['natural_disaster', 'weather'], false, isRecentNaturalEvent)
-        ),
+      HEATMAP_LAYER_CONFIGS.forEach((config) => {
+        mapInstance.addSource(config.sourceId, {
+          type: 'geojson',
+          data: buildFeatureCollection(
+            getHeatmapEventPointFeatures(
+              config.types,
+              config.includeCustomWar,
+              config.recentWindow === 'natural' ? isRecentNaturalEvent : undefined,
+            ),
+          ),
+        });
       });
       mapInstance.addSource('war-affected-zones', {
         type: 'geojson',
@@ -1085,111 +1095,18 @@ export function Map({
         ),
       });
 
-      mapInstance.addLayer(
-        {
-          id: 'events-heat-war',
-          type: 'heatmap',
-          source: 'events-heatmap-war',
-          maxzoom: 12,
-          paint: {
-            'heatmap-weight': [
-              'interpolate',
-              ['linear'],
-              ['coalesce', ['get', 'severity'], 1],
-              0, 0,
-              10, 1,
-            ],
-            'heatmap-intensity': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              0, 0.7,
-              6, 2.3,
-              10, 4.0,
-            ],
-            'heatmap-color': [
-              'interpolate',
-              ['linear'],
-              ['heatmap-density'],
-              0, 'rgba(255, 64, 64, 0)',
-              0.25, 'rgba(255, 64, 64, 0.35)',
-              0.5, 'rgba(255, 0, 90, 0.55)',
-              0.75, 'rgba(190, 0, 80, 0.75)',
-              1, 'rgba(130, 0, 60, 0.9)',
-            ],
-            'heatmap-radius': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              0, 14,
-              6, 55,
-              10, 120,
-            ],
-            'heatmap-opacity': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              2, 0.85,
-              10, 1,
-              12, 0.6,
-            ],
+      HEATMAP_LAYER_CONFIGS.forEach((config) => {
+        mapInstance.addLayer(
+          {
+            id: config.id,
+            type: 'heatmap',
+            source: config.sourceId,
+            maxzoom: config.maxzoom,
+            paint: config.paint,
           },
-        },
-        beforeId
-      );
-
-      mapInstance.addLayer(
-        {
-          id: 'events-heat-natural',
-          type: 'heatmap',
-          source: 'events-heatmap-natural',
-          maxzoom: 12,
-          paint: {
-            'heatmap-weight': [
-              'interpolate',
-              ['linear'],
-              ['coalesce', ['get', 'severity'], 1],
-              0, 0,
-              10, 1,
-            ],
-            'heatmap-intensity': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              0, 0.6,
-              6, 2.0,
-              10, 3.6,
-            ],
-            'heatmap-color': [
-              'interpolate',
-              ['linear'],
-              ['heatmap-density'],
-              0, 'rgba(64, 255, 200, 0)',
-              0.25, 'rgba(64, 255, 200, 0.35)',
-              0.5, 'rgba(0, 200, 170, 0.55)',
-              0.75, 'rgba(0, 150, 140, 0.75)',
-              1, 'rgba(0, 90, 120, 0.9)',
-            ],
-            'heatmap-radius': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              0, 14,
-              6, 50,
-              10, 110,
-            ],
-            'heatmap-opacity': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              2, 0.8,
-              10, 0.95,
-              12, 0.55,
-            ],
-          },
-        },
-        beforeId
-      );
+          beforeId
+        );
+      });
 
       mapInstance.addLayer(
         {
@@ -1239,16 +1156,13 @@ export function Map({
         beforeId
       );
 
-      const heatmapLayerConfigs = [
-        { id: 'events-heat-war', types: ['war'], includeCustomWar: true, label: 'War Heatmap' },
-        {
-          id: 'events-heat-natural',
-          types: ['natural_disaster', 'weather'],
-          includeCustomWar: false,
-          label: 'Natural Events Heatmap',
-          isRecentOverride: isRecentNaturalEvent,
-        },
-      ];
+      const heatmapLayerConfigs = HEATMAP_LAYER_CONFIGS.map((config) => ({
+        id: config.id,
+        types: config.types,
+        includeCustomWar: config.includeCustomWar,
+        label: config.label,
+        isRecentOverride: config.recentWindow === 'natural' ? isRecentNaturalEvent : undefined,
+      }));
 
       const handleHeatmapClick = (
         event: mapboxgl.MapMouseEvent,
@@ -1268,7 +1182,7 @@ export function Map({
           dateEnd,
           centerLat,
           centerLng,
-          averageMagnitude,
+          matchingEvents,
         } = summarizeHeatmap(
           lng,
           lat,
@@ -1293,21 +1207,44 @@ export function Map({
           typeof centerLat === 'number' && typeof centerLng === 'number'
             ? `${centerLat.toFixed(2)}, ${centerLng.toFixed(2)}`
             : 'N/A';
-        const magnitudeText =
-          typeof averageMagnitude === 'number' ? averageMagnitude.toFixed(1) : 'N/A';
+
+        const tariffSummary: TariffHeatmapSummary = {
+          label,
+          radiusKm,
+          count,
+          avgSeverity,
+          topTypesText: topTypeText,
+          dateRange: dateText,
+          locationText,
+          entries: matchingEvents.map((event) => ({
+            id: event.id,
+            title: event.title,
+            leviedBy: event.source ?? 'Unknown',
+            target: event.country ?? 'Unknown',
+            description: event.description ?? 'No description available.',
+            dateRange: formatEventDateRange(event.startDate, event.endDate),
+          })),
+        };
+
+        if (types.includes('tariff') && onTariffHeatmapClick) {
+          if (heatmapPopupRef.current) {
+            heatmapPopupRef.current.remove();
+          }
+          onTariffHeatmapClick(tariffSummary);
+          return;
+        }
 
         heatmapPopupRef.current = new mapboxgl.Popup({ closeButton: true, closeOnClick: true })
           .setLngLat([lng, lat])
           .setHTML(
-            `<div style="font-family: monospace; font-size: 12px;">
-              <div style="font-weight: 700; margin-bottom: 4px;">${label}</div>
-              <div>Radius: ${Math.round(radiusKm)} km</div>
-              <div>Events: ${count}</div>
-              <div>Avg magnitude (quakes): ${magnitudeText}</div>
-              <div>Top types (count): ${topTypeText}</div>
-              <div>Date range: ${dateText}</div>
-              <div>Location: ${locationText}</div>
-            </div>`,
+            buildHeatmapPopupHtml({
+              label,
+              radiusKm,
+              count,
+              topTypesText: topTypeText,
+              dateText,
+              locationText,
+            }),
           )
           .addTo(mapInstance);
       };
@@ -1731,6 +1668,8 @@ export function Map({
         closeSelectionPopup();
       });
 
+      updateSchedulerRef.current.onReady();
+
     });
 
     return () => {
@@ -1741,10 +1680,9 @@ export function Map({
 
   // Update nodes/connections when they change (less frequent, from initial load)
   useEffect(() => {
-    if (map.current && map.current.isStyleLoaded()) {
-      updateSourceData(map.current);
-    }
-  }, [nodes, connections, pathEdges, alternativeSuppliers, userConnections, updateSourceData]);
+    const isReady = Boolean(map.current && map.current.isStyleLoaded());
+    updateSchedulerRef.current.request(isReady);
+  }, [nodes, connections, pathEdges, alternativeSuppliers, userConnections]);
 
   // Initial event load - only runs once when eventsLoaded becomes true
   useEffect(() => {

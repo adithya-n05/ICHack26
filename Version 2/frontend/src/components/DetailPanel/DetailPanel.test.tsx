@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, test } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { DetailPanel } from './DetailPanel';
 
@@ -46,5 +46,22 @@ describe('DetailPanel alternatives', () => {
     );
 
     expect(screen.queryByText('Alternative Suppliers')).toBeNull();
+  });
+
+  test('shows delete button for user connections', () => {
+    const onDeleteConnection = vi.fn();
+    render(
+      <DetailPanel
+        selectedNode={null}
+        selectedConnection={{ ...baseConnection, is_user_connection: true }}
+        alternativeSuppliers={[]}
+        onClose={() => undefined}
+        onDeleteConnection={onDeleteConnection}
+      />,
+    );
+
+    const deleteButton = screen.getByRole('button', { name: /delete connection/i });
+    fireEvent.click(deleteButton);
+    expect(onDeleteConnection).toHaveBeenCalledWith(baseConnection.id);
   });
 });

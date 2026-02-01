@@ -42,6 +42,21 @@ CREATE TABLE IF NOT EXISTS connections (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- User connections table (custom links added in UI)
+CREATE TABLE IF NOT EXISTS user_connections (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  from_node_id TEXT REFERENCES companies(id),
+  to_node_id TEXT REFERENCES companies(id),
+  transport_mode TEXT DEFAULT 'land',
+  status TEXT DEFAULT 'healthy',
+  is_user_connection BOOLEAN DEFAULT TRUE,
+  materials JSONB DEFAULT '[]'::jsonb,
+  description TEXT,
+  lead_time_days INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Events table (disasters, disruptions, geopolitical events)
 CREATE TABLE IF NOT EXISTS events (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -115,6 +130,8 @@ CREATE INDEX IF NOT EXISTS idx_suppliers_tier ON suppliers(tier);
 CREATE INDEX IF NOT EXISTS idx_connections_status ON connections(status);
 CREATE INDEX IF NOT EXISTS idx_connections_from ON connections(from_node_id);
 CREATE INDEX IF NOT EXISTS idx_connections_to ON connections(to_node_id);
+CREATE INDEX IF NOT EXISTS idx_user_connections_from ON user_connections(from_node_id);
+CREATE INDEX IF NOT EXISTS idx_user_connections_to ON user_connections(to_node_id);
 
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
 CREATE INDEX IF NOT EXISTS idx_events_severity ON events(severity);
@@ -131,6 +148,7 @@ CREATE INDEX IF NOT EXISTS idx_news_published ON news(published_at DESC);
 ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE connections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_connections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tariffs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE news ENABLE ROW LEVEL SECURITY;
@@ -140,6 +158,7 @@ ALTER TABLE user_supply_chains ENABLE ROW LEVEL SECURITY;
 -- CREATE POLICY "Service role has full access to companies" ON companies FOR ALL USING (true);
 -- CREATE POLICY "Service role has full access to suppliers" ON suppliers FOR ALL USING (true);
 -- CREATE POLICY "Service role has full access to connections" ON connections FOR ALL USING (true);
+-- CREATE POLICY "Service role has full access to user_connections" ON user_connections FOR ALL USING (true);
 -- CREATE POLICY "Service role has full access to events" ON events FOR ALL USING (true);
 -- CREATE POLICY "Service role has full access to tariffs" ON tariffs FOR ALL USING (true);
 -- CREATE POLICY "Service role has full access to news" ON news FOR ALL USING (true);

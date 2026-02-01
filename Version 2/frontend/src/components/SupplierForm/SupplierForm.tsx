@@ -119,7 +119,7 @@ export function SupplierForm({ onSubmit, onSubmitSuccess, onClose }: SupplierFor
   };
 
   return (
-    <form className="bg-bg-secondary p-6 rounded border border-border-color max-w-lg">
+    <form className="bg-bg-secondary p-6 rounded max-w-lg shadow-[0_10px_30px_rgba(0,0,0,0.35)] ring-1 ring-white/5">
       {/* Header with close button */}
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-text-primary font-mono text-lg">Add Your Supply Chain</h2>
@@ -160,7 +160,7 @@ export function SupplierForm({ onSubmit, onSubmitSuccess, onClose }: SupplierFor
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
               placeholder="Your company name"
-              className="w-full bg-bg-tertiary border border-border-color rounded p-2 text-text-primary focus:border-accent-cyan focus:outline-none"
+              className="w-full bg-bg-tertiary rounded p-2 text-text-primary ring-1 ring-white/10 focus:outline-none focus:ring-accent-cyan/60"
             />
           </div>
           <div className="mb-4 grid grid-cols-2 gap-4">
@@ -175,7 +175,7 @@ export function SupplierForm({ onSubmit, onSubmitSuccess, onClose }: SupplierFor
                   setLocation({ ...location, city: e.target.value })
                 }
                 placeholder="City"
-                className="w-full bg-bg-tertiary border border-border-color rounded p-2 text-text-primary focus:border-accent-cyan focus:outline-none"
+                className="w-full bg-bg-tertiary rounded p-2 text-text-primary ring-1 ring-white/10 focus:outline-none focus:ring-accent-cyan/60"
               />
             </div>
             <div>
@@ -189,7 +189,7 @@ export function SupplierForm({ onSubmit, onSubmitSuccess, onClose }: SupplierFor
                   setLocation({ ...location, country: e.target.value })
                 }
                 placeholder="Country"
-                className="w-full bg-bg-tertiary border border-border-color rounded p-2 text-text-primary focus:border-accent-cyan focus:outline-none"
+                className="w-full bg-bg-tertiary rounded p-2 text-text-primary ring-1 ring-white/10 focus:outline-none focus:ring-accent-cyan/60"
               />
             </div>
           </div>
@@ -223,7 +223,7 @@ export function SupplierForm({ onSubmit, onSubmitSuccess, onClose }: SupplierFor
                 setCurrentSupplier({ ...currentSupplier, name: e.target.value })
               }
               placeholder="Supplier company name"
-              className="w-full bg-bg-tertiary border border-border-color rounded p-2 text-text-primary focus:border-accent-cyan focus:outline-none"
+              className="w-full bg-bg-tertiary rounded p-2 text-text-primary ring-1 ring-white/10 focus:outline-none focus:ring-accent-cyan/60"
             />
           </div>
           <div className="mb-4">
@@ -240,7 +240,7 @@ export function SupplierForm({ onSubmit, onSubmitSuccess, onClose }: SupplierFor
                 })
               }
               placeholder="City, Country"
-              className="w-full bg-bg-tertiary border border-border-color rounded p-2 text-text-primary focus:border-accent-cyan focus:outline-none"
+              className="w-full bg-bg-tertiary rounded p-2 text-text-primary ring-1 ring-white/10 focus:outline-none focus:ring-accent-cyan/60"
             />
           </div>
           <div className="mb-4">

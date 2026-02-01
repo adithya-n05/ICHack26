@@ -2,12 +2,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { Map } from './components/Map';
 import { DetailPanel } from './components/DetailPanel';
 import { NewsSidebar } from './components/NewsSidebar/NewsSidebar';
+import { TariffPanel, type TariffHeatmapSummary } from './components/TariffPanel/TariffPanel';
 import { SupplierForm } from './components/SupplierForm';
 import { socket } from './lib/socket';
 import { usePaths } from './hooks/usePaths';
+import { createUserConnection, deleteUserConnection, fetchUserConnections } from './lib/userConnections';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-const LOCAL_STORAGE_KEY = 'sentinel-user-connections';
 
 interface Company {
   id: string;
@@ -82,6 +83,7 @@ function App() {
   const [userConnections, setUserConnections] = useState<Connection[]>([]);
   const [connectMode, setConnectMode] = useState(false);
   const [pendingConnection, setPendingConnection] = useState<Company | null>(null);
+  const [tariffHeatmap, setTariffHeatmap] = useState<TariffHeatmapSummary | null>(null);
   const { edges: pathEdges, loading: pathsLoading, error: pathsError } = usePaths(selectedNode?.id);
   const [alternativeSuppliers, setAlternativeSuppliers] = useState<Company[]>([]);
   const [alternativesLoading, setAlternativesLoading] = useState(false);
@@ -95,25 +97,24 @@ function App() {
   const shouldFetchAlternatives = Boolean(selectedNode && firstAmberEdge && alternativeMaterial);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (!stored) return;
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) {
-        setUserConnections(parsed);
-      }
-    } catch (err) {
-      console.warn('Failed to load user connections:', err);
-    }
-  }, []);
+    let isMounted = true;
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(userConnections));
-    } catch (err) {
-      console.warn('Failed to persist user connections:', err);
-    }
-  }, [userConnections]);
+    const loadUserConnections = async () => {
+      try {
+        const data = await fetchUserConnections();
+        if (!isMounted) return;
+        setUserConnections(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.warn('Failed to load user connections:', err);
+      }
+    };
+
+    loadUserConnections();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Fetch initial news
   useEffect(() => {
@@ -219,13 +220,6 @@ function App() {
     return null;
   };
 
-  const createUserConnectionId = () => {
-    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-      return `user-${crypto.randomUUID()}`;
-    }
-    return `user-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
-  };
-
   const isDuplicateUserConnection = (fromId: string, toId: string) =>
     userConnections.some(
       (connection) =>
@@ -233,13 +227,14 @@ function App() {
         (connection.from_node_id === toId && connection.to_node_id === fromId),
     );
 
-  const handleNodeClick = (node: MapCompany) => {
+  const handleNodeClick = async (node: MapCompany) => {
     const normalizedNode = normalizeCompany(node);
     if (!normalizedNode) {
       console.warn('Skipping node without location:', node.id);
       return;
     }
     console.log('Node clicked:', node.name);
+    setTariffHeatmap(null);
 
     if (connectMode) {
       setSelectedNode(null);
@@ -260,21 +255,22 @@ function App() {
         return;
       }
 
-      const newConnection: Connection = {
-        id: createUserConnectionId(),
-        from_node_id: pendingConnection.id,
-        to_node_id: normalizedNode.id,
-        transport_mode: 'land',
-        status: 'healthy',
-        is_user_connection: true,
-      };
-
-      setUserConnections((prev) => [...prev, newConnection]);
-      setSelectedConnection({
-        ...newConnection,
-        fromNode: pendingConnection,
-        toNode: normalizedNode,
-      });
+      try {
+        const savedConnection = await createUserConnection({
+          from_node_id: pendingConnection.id,
+          to_node_id: normalizedNode.id,
+          transport_mode: 'land',
+          status: 'healthy',
+        });
+        setUserConnections((prev) => [...prev, savedConnection]);
+        setSelectedConnection({
+          ...savedConnection,
+          fromNode: pendingConnection,
+          toNode: normalizedNode,
+        });
+      } catch (err) {
+        console.warn('Failed to save user connection:', err);
+      }
       setPendingConnection(null);
       return;
     }
@@ -287,6 +283,7 @@ function App() {
     const fromNode = connection.fromNode ? normalizeCompany(connection.fromNode) ?? undefined : undefined;
     const toNode = connection.toNode ? normalizeCompany(connection.toNode) ?? undefined : undefined;
     console.log('Connection clicked:', connection.id);
+    setTariffHeatmap(null);
     setSelectedNode(null);
     setSelectedConnection({
       ...connection,
@@ -295,9 +292,26 @@ function App() {
     });
   };
 
+  const handleDeleteConnection = async (id: string) => {
+    try {
+      await deleteUserConnection(id);
+      setUserConnections((prev) => prev.filter((conn) => conn.id !== id));
+      setSelectedConnection(null);
+    } catch (err) {
+      console.warn('Failed to delete user connection:', err);
+    }
+  };
+
   const handleClosePanel = () => {
     setSelectedNode(null);
     setSelectedConnection(null);
+    setTariffHeatmap(null);
+  };
+
+  const handleTariffHeatmapClick = (summary: TariffHeatmapSummary) => {
+    setSelectedNode(null);
+    setSelectedConnection(null);
+    setTariffHeatmap(summary);
   };
 
   const toggleConnectMode = () => {
@@ -305,6 +319,7 @@ function App() {
     setPendingConnection(null);
     setSelectedNode(null);
     setSelectedConnection(null);
+    setTariffHeatmap(null);
   };
 
   const handleSupplierFormSuccess = () => {
@@ -344,6 +359,7 @@ function App() {
           key={mapRefreshKey}
           onNodeClick={handleNodeClick}
           onConnectionClick={handleConnectionClick}
+          onTariffHeatmapClick={handleTariffHeatmapClick}
           pathEdges={pathEdges as PathEdge[]}
           alternativeSuppliers={effectiveAlternativeSuppliers}
           userConnections={userConnections}
@@ -366,15 +382,20 @@ function App() {
             )}
           </div>
         )}
-        <DetailPanel
-          selectedNode={selectedNode}
-          selectedConnection={selectedConnection}
-          onClose={handleClosePanel}
-          alternativeSuppliers={effectiveAlternativeSuppliers}
-          riskyPathEdge={effectiveRiskyPathEdge}
-          alternativesLoading={effectiveAlternativesLoading}
-          alternativesError={effectiveAlternativesError}
-        />
+        {tariffHeatmap ? (
+          <TariffPanel summary={tariffHeatmap} onClose={handleClosePanel} />
+        ) : (
+          <DetailPanel
+            selectedNode={selectedNode}
+            selectedConnection={selectedConnection}
+            onClose={handleClosePanel}
+            onDeleteConnection={handleDeleteConnection}
+            alternativeSuppliers={effectiveAlternativeSuppliers}
+            riskyPathEdge={effectiveRiskyPathEdge}
+            alternativesLoading={effectiveAlternativesLoading}
+            alternativesError={effectiveAlternativesError}
+          />
+        )}
       </div>
 
       {/* Supplier form modal */}

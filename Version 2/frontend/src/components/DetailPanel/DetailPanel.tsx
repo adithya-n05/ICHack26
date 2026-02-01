@@ -39,6 +39,7 @@ interface DetailPanelProps {
   selectedNode: Company | null;
   selectedConnection: Connection | null;
   onClose: () => void;
+  onDeleteConnection?: (id: string) => void;
   alternativeSuppliers?: Company[];
   riskyPathEdge?: PathEdge | null;
   alternativesLoading?: boolean;
@@ -70,6 +71,7 @@ export function DetailPanel({
   selectedNode,
   selectedConnection,
   onClose,
+  onDeleteConnection,
   alternativeSuppliers = [],
   riskyPathEdge = null,
   alternativesLoading = false,
@@ -191,8 +193,19 @@ export function DetailPanel({
         )}
 
         {selectedConnection.is_user_connection && (
-          <div className="mt-4 px-3 py-2 bg-accent-cyan/20 rounded ring-1 ring-accent-cyan/60">
-            <span className="text-accent-cyan text-xs font-mono">YOUR SUPPLY CHAIN</span>
+          <div className="mt-4 space-y-2">
+            <div className="px-3 py-2 bg-accent-cyan/20 rounded ring-1 ring-accent-cyan/60">
+              <span className="text-accent-cyan text-xs font-mono">YOUR SUPPLY CHAIN</span>
+            </div>
+            {onDeleteConnection && (
+              <button
+                type="button"
+                onClick={() => onDeleteConnection(selectedConnection.id)}
+                className="w-full px-3 py-2 rounded text-xs font-mono uppercase tracking-wider text-red-200 ring-1 ring-red-500/60 hover:bg-red-500/10"
+              >
+                Delete Connection
+              </button>
+            )}
           </div>
         )}
 

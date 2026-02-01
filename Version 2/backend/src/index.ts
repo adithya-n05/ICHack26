@@ -12,6 +12,7 @@ import eventsRouter from './routes/events';
 import tariffsRouter from './routes/tariffs';
 import newsRouter from './routes/news';
 import userSupplyChainRouter from './routes/user-supply-chain';
+import userConnectionsRouter from './routes/user-connections';
 import alternativesRouter from './routes/alternatives';
 import pathsRouter from './routes/paths';
 import { errorHandler } from './middleware/errorHandler';
@@ -55,6 +56,7 @@ app.use('/api/events', eventsRouter);
 app.use('/api/tariffs', tariffsRouter);
 app.use('/api/news', newsRouter);
 app.use('/api/user-supply-chain', userSupplyChainRouter);
+app.use('/api/user-connections', userConnectionsRouter);
 app.use('/api/alternatives', alternativesRouter);
 app.use('/api/paths', pathsRouter);
 

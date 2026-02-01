@@ -62,7 +62,7 @@ export function NewsTicker({ items }: NewsTickerProps) {
     return (
       <div
         data-testid="news-ticker"
-        className="h-12 bg-bg-secondary border-t border-border-color flex items-center px-4"
+        className="h-12 bg-bg-secondary flex items-center px-4 shadow-[0_-1px_12px_rgba(0,0,0,0.35)] ring-1 ring-white/5"
       >
         <span className="text-text-secondary text-sm font-mono">
           Loading news feed...
@@ -74,7 +74,7 @@ export function NewsTicker({ items }: NewsTickerProps) {
   return (
     <div
       data-testid="news-ticker"
-      className="h-12 bg-bg-secondary border-t border-border-color overflow-hidden"
+      className="h-12 bg-bg-secondary overflow-hidden shadow-[0_-1px_12px_rgba(0,0,0,0.35)] ring-1 ring-white/5"
     >
       <div
         data-testid="ticker-content"
