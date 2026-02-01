@@ -49,8 +49,9 @@ class RiskAssessment(BaseModel):
         description="Confidence in this assessment from 0.0 to 1.0"
     )
 
-    reasoning: Dict[str, Any] = Field(
-        description="Structured reasoning with summary, factors, and event_ids"
+    reasoning: str = Field(
+        default="",
+        description="Clear explanation of the assessment (2-3 sentences)"
     )
 
     affected_entities: List[AffectedEntity] = Field(
@@ -58,7 +59,7 @@ class RiskAssessment(BaseModel):
         description="List of nodes and connections impacted"
     )
 
-    alternatives: Dict[str, List[Alternative]] = Field(
-        default_factory=lambda: {"suppliers": [], "routes": []},
+    alternatives: Dict[str, Any] = Field(
+        default_factory=dict,
         description="Alternative suppliers and routes (if risk >= AT_RISK)"
     )
