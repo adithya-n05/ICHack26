@@ -3,13 +3,9 @@
 // Integrates Monte Carlo simulation, ML sentiment analysis, and event proximity
 
 import { supabase } from '../lib/supabase';
-import OpenAI from 'openai';
+import { complete as llmComplete } from './llmService';
 import { runMonteCarloSimulation } from './monteCarlo';
 import { analyzeNewsSentiment } from './mlRiskEngine';
-
-const openai = process.env.OPENAI_API_KEY 
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  : null;
 
 // ============================================================================
 // Types
@@ -422,22 +418,10 @@ async function generateExplanation(
     ? `\nMonte Carlo Simulation Key Scenarios: ${scenarioSummary}`
     : '';
 
-  // If no OpenAI, generate a simple explanation
-  if (!openai) {
-    return generateSimpleExplanation(fromName, toName, status, riskScore, factors, events, scenarioSummary);
-  }
-
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a supply chain risk analyst providing concise, actionable risk assessments. Generate a brief 2-3 sentence explanation of route risk. Be specific about the contributing factors - mention Monte Carlo projections, event proximity, geopolitical factors, and sentiment analysis if they're significant contributors. The risk score and status should match what you describe.`
-        },
-        {
-          role: 'user',
-          content: `Explain the risk for this supply route:
+    const response = await llmComplete({
+      systemPrompt: `You are a supply chain risk analyst providing concise, actionable risk assessments. Generate a brief 2-3 sentence explanation of route risk. Be specific about the contributing factors - mention Monte Carlo projections, event proximity, geopolitical factors, and sentiment analysis if they're significant contributors. The risk score and status should match what you describe.`,
+      prompt: `Explain the risk for this supply route:
 
 Route: ${fromName} → ${toName}
 Status: ${status.toUpperCase()}
@@ -450,17 +434,15 @@ ${scenarioInfo}
 Recent Events Near Route:
 ${eventSummary}
 
-Provide a 2-3 sentence summary explaining why this route has a ${riskScore}/100 risk score (${status.toUpperCase()} status). Reference the specific factors and their contributions.`
-        }
-      ],
-      max_tokens: 200,
+Provide a 2-3 sentence summary explaining why this route has a ${riskScore}/100 risk score (${status.toUpperCase()} status). Reference the specific factors and their contributions.`,
+      maxTokens: 200,
       temperature: 0.5,
     });
 
-    return response.choices[0]?.message?.content?.trim() || 
+    return response.text || 
            generateSimpleExplanation(fromName, toName, status, riskScore, factors, events, scenarioSummary);
   } catch (error) {
-    console.error('GPT explanation error:', error);
+    console.error('LLM explanation error:', error);
     return generateSimpleExplanation(fromName, toName, status, riskScore, factors, events, scenarioSummary);
   }
 }

@@ -1,14 +1,14 @@
 // backend/src/services/mlRiskEngine.ts
 // ML-Enhanced Risk Engine using NLP, embeddings, and time-series analysis
 
-import OpenAI from 'openai';
 import { supabase } from '../lib/supabase';
 import { runQuery } from '../lib/neo4j';
-
-// Initialize OpenAI client (optional - gracefully degrades if not configured)
-const openai = process.env.OPENAI_API_KEY 
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  : null;
+import { 
+  complete as llmComplete, 
+  analyzeNewsImpact, 
+  generateEmbedding as llmGenerateEmbedding, 
+  cosineSimilarity as llmCosineSimilarity 
+} from './llmService';
 
 // ============================================================================
 // TYPES
@@ -47,41 +47,34 @@ export interface SentimentResult {
 }
 
 // ============================================================================
-// SENTIMENT ANALYSIS (using OpenAI or fallback to keyword-based)
+// SENTIMENT ANALYSIS (using LLM service with fallback)
 // ============================================================================
 
 /**
- * Analyze sentiment of news/event text using LLM
+ * Analyze sentiment of news/event text using LLM service
  */
 export async function analyzeNewsSentiment(text: string): Promise<SentimentResult> {
-  if (openai) {
-    try {
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `You are a supply chain risk analyst. Analyze the following text for sentiment and risk signals.
+  try {
+    const response = await llmComplete({
+      systemPrompt: `You are a supply chain risk analyst. Analyze the following text for sentiment and risk signals.
 Return a JSON object with:
 - score: number from -1 (very negative/high risk) to 1 (very positive/low risk)
 - magnitude: confidence from 0 to 1
 - aspects: array of {topic: string, sentiment: number} for specific risk areas (logistics, political, weather, labor, etc.)
 
-Focus on supply chain disruption signals: delays, shortages, conflicts, natural disasters, strikes, policy changes.`
-          },
-          { role: 'user', content: text.slice(0, 2000) } // Limit text length
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.3,
-      });
+Focus on supply chain disruption signals: delays, shortages, conflicts, natural disasters, strikes, policy changes.`,
+      prompt: text.slice(0, 2000), // Limit text length
+      maxTokens: 300,
+      temperature: 0.3,
+    });
 
-      const content = response.choices[0]?.message?.content;
-      if (content) {
-        return JSON.parse(content) as SentimentResult;
-      }
-    } catch (error) {
-      console.error('OpenAI sentiment analysis failed, using fallback:', error);
+    // Try to parse JSON from response
+    const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]) as SentimentResult;
     }
+  } catch (error) {
+    console.error('LLM sentiment analysis failed, using fallback:', error);
   }
 
   // Fallback: keyword-based sentiment analysis
@@ -146,218 +139,13 @@ function keywordBasedSentiment(text: string): SentimentResult {
 // ============================================================================
 
 /**
- * Generate embedding for text using OpenAI or simple TF-IDF fallback
+ * Generate embedding for text using llmService with HuggingFace fallback
+ * Re-exported from llmService for backward compatibility
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
-  if (openai) {
-    try {
-      const response = await openai.embeddings.create({
-        model: 'text-embedding-3-small',
-        input: text.slice(0, 8000),
-      });
-      return response.data[0].embedding;
-    } catch (error) {
-      console.error('OpenAI embedding failed, using fallback:', error);
-    }
-  }
+export const generateEmbedding = llmGenerateEmbedding;
 
-  // Fallback: simple TF-IDF-like embedding
-  return simpleTfIdfEmbedding(text);
-}
-
-/**
- * Simple TF-IDF-like embedding (128 dimensions based on keyword categories)
- */
-function simpleTfIdfEmbedding(text: string): number[] {
-  const lowerText = text.toLowerCase();
-  
-  // Define 128 keyword categories for consistent dimensionality
-  const categories = [
-    // Natural disasters (0-15)
-    ['earthquake', 'seismic', 'quake', 'tremor'],
-    ['tsunami', 'tidal', 'wave'],
-    ['hurricane', 'typhoon', 'cyclone', 'storm'],
-    ['flood', 'flooding', 'deluge', 'inundation'],
-    ['drought', 'dry', 'water shortage'],
-    ['wildfire', 'fire', 'blaze', 'burn'],
-    ['tornado', 'twister', 'wind'],
-    ['volcano', 'eruption', 'lava', 'ash'],
-    ['landslide', 'mudslide', 'avalanche'],
-    ['heatwave', 'heat', 'temperature'],
-    ['cold', 'freeze', 'frost', 'snow'],
-    ['lightning', 'thunder'],
-    ['hail', 'ice'],
-    ['fog', 'visibility'],
-    ['sandstorm', 'dust'],
-    ['sinkhole', 'subsidence'],
-    
-    // Geopolitical (16-31)
-    ['war', 'warfare', 'military', 'invasion'],
-    ['conflict', 'battle', 'fighting'],
-    ['sanctions', 'embargo', 'restriction'],
-    ['tariff', 'duty', 'trade war'],
-    ['election', 'vote', 'political'],
-    ['coup', 'overthrow', 'revolution'],
-    ['protest', 'demonstration', 'riot'],
-    ['terrorism', 'attack', 'bomb'],
-    ['refugee', 'migration', 'displacement'],
-    ['treaty', 'agreement', 'deal'],
-    ['diplomacy', 'negotiation', 'talks'],
-    ['alliance', 'partnership', 'coalition'],
-    ['independence', 'secession', 'separation'],
-    ['annexation', 'occupation', 'territory'],
-    ['ceasefire', 'peace', 'armistice'],
-    ['mobilization', 'conscription', 'draft'],
-    
-    // Economic (32-47)
-    ['recession', 'depression', 'downturn'],
-    ['inflation', 'price', 'cost'],
-    ['currency', 'exchange', 'devaluation'],
-    ['bankruptcy', 'insolvency', 'default'],
-    ['stock', 'market', 'crash'],
-    ['unemployment', 'layoff', 'job loss'],
-    ['growth', 'gdp', 'expansion'],
-    ['investment', 'funding', 'capital'],
-    ['debt', 'loan', 'credit'],
-    ['interest', 'rate', 'monetary'],
-    ['subsidy', 'stimulus', 'relief'],
-    ['export', 'import', 'trade'],
-    ['deficit', 'surplus', 'balance'],
-    ['commodity', 'raw material', 'resource'],
-    ['shortage', 'scarcity', 'supply'],
-    ['surplus', 'oversupply', 'glut'],
-    
-    // Labor (48-55)
-    ['strike', 'walkout', 'stoppage'],
-    ['union', 'labor', 'worker'],
-    ['wage', 'salary', 'pay'],
-    ['hiring', 'recruitment', 'employment'],
-    ['retirement', 'pension', 'benefit'],
-    ['safety', 'accident', 'injury'],
-    ['training', 'skill', 'education'],
-    ['automation', 'robot', 'ai'],
-    
-    // Infrastructure (56-71)
-    ['port', 'harbor', 'dock'],
-    ['airport', 'aviation', 'flight'],
-    ['railway', 'train', 'rail'],
-    ['highway', 'road', 'traffic'],
-    ['bridge', 'tunnel', 'crossing'],
-    ['pipeline', 'transmission', 'grid'],
-    ['power', 'electricity', 'energy'],
-    ['internet', 'network', 'telecom'],
-    ['water', 'sewage', 'utility'],
-    ['warehouse', 'storage', 'distribution'],
-    ['construction', 'building', 'development'],
-    ['maintenance', 'repair', 'upgrade'],
-    ['capacity', 'congestion', 'bottleneck'],
-    ['expansion', 'extension', 'addition'],
-    ['closure', 'shutdown', 'offline'],
-    ['delay', 'backlog', 'waiting'],
-    
-    // Health/Safety (72-87)
-    ['pandemic', 'epidemic', 'outbreak'],
-    ['virus', 'disease', 'infection'],
-    ['quarantine', 'lockdown', 'isolation'],
-    ['vaccine', 'treatment', 'medicine'],
-    ['hospital', 'healthcare', 'medical'],
-    ['contamination', 'pollution', 'toxic'],
-    ['recall', 'defect', 'quality'],
-    ['inspection', 'compliance', 'regulation'],
-    ['certification', 'standard', 'audit'],
-    ['hazard', 'danger', 'risk'],
-    ['emergency', 'crisis', 'disaster'],
-    ['recovery', 'restoration', 'rebuilding'],
-    ['insurance', 'claim', 'coverage'],
-    ['liability', 'lawsuit', 'legal'],
-    ['fine', 'penalty', 'violation'],
-    ['ban', 'prohibition', 'restriction'],
-    
-    // Technology (88-95)
-    ['cyberattack', 'hack', 'breach'],
-    ['malware', 'ransomware', 'virus'],
-    ['outage', 'downtime', 'failure'],
-    ['software', 'system', 'platform'],
-    ['data', 'information', 'privacy'],
-    ['blockchain', 'crypto', 'digital'],
-    ['iot', 'sensor', 'tracking'],
-    ['cloud', 'server', 'computing'],
-    
-    // Shipping/Logistics (96-111)
-    ['shipping', 'freight', 'cargo'],
-    ['container', 'vessel', 'ship'],
-    ['trucking', 'transport', 'delivery'],
-    ['customs', 'border', 'clearance'],
-    ['warehouse', 'inventory', 'stock'],
-    ['route', 'lane', 'corridor'],
-    ['charter', 'lease', 'contract'],
-    ['carrier', 'logistics', '3pl'],
-    ['tracking', 'visibility', 'monitoring'],
-    ['packaging', 'handling', 'loading'],
-    ['insurance', 'liability', 'coverage'],
-    ['documentation', 'paperwork', 'permit'],
-    ['perishable', 'cold chain', 'temperature'],
-    ['hazmat', 'dangerous', 'regulated'],
-    ['express', 'expedited', 'urgent'],
-    ['bulk', 'volume', 'mass'],
-    
-    // Industry specific (112-127)
-    ['semiconductor', 'chip', 'electronics'],
-    ['automotive', 'vehicle', 'car'],
-    ['pharmaceutical', 'drug', 'biotech'],
-    ['agriculture', 'farming', 'crop'],
-    ['textile', 'clothing', 'fashion'],
-    ['steel', 'metal', 'mining'],
-    ['oil', 'gas', 'petroleum'],
-    ['chemical', 'plastic', 'polymer'],
-    ['food', 'beverage', 'consumer'],
-    ['aerospace', 'defense', 'military'],
-    ['construction', 'material', 'cement'],
-    ['paper', 'packaging', 'forestry'],
-    ['retail', 'ecommerce', 'consumer'],
-    ['luxury', 'premium', 'brand'],
-    ['battery', 'ev', 'renewable'],
-    ['rare earth', 'mineral', 'critical'],
-  ];
-
-  // Generate embedding based on keyword presence and frequency
-  const embedding: number[] = [];
-  
-  for (const category of categories) {
-    let score = 0;
-    for (const keyword of category) {
-      const regex = new RegExp(keyword, 'gi');
-      const matches = lowerText.match(regex);
-      if (matches) {
-        score += matches.length * 0.3;
-      }
-    }
-    // Normalize to 0-1 range with tanh
-    embedding.push(Math.tanh(score));
-  }
-
-  return embedding;
-}
-
-/**
- * Calculate cosine similarity between two embeddings
- */
-export function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length) return 0;
-  
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-  
-  for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  
-  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
-  return denominator === 0 ? 0 : dotProduct / denominator;
-}
+// cosineSimilarity is also re-exported from llmService
+export const cosineSimilarity = llmCosineSimilarity;
 
 /**
  * Find similar historical events based on embedding similarity
@@ -760,25 +548,17 @@ export async function assessRiskML(
   const riskScore = totalWeight > 0 ? totalScore / totalWeight * 10 : 5;
   const confidence = Math.min(1, totalWeight / 0.8); // Max confidence at 80% weight coverage
 
-  // Generate AI analysis if available
+  // Generate AI analysis if factors exist
   let aiAnalysis: string | undefined;
-  if (openai && factors.length > 0) {
+  if (factors.length > 0) {
     try {
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a supply chain risk analyst. Provide a brief 2-3 sentence analysis of the risk factors.',
-          },
-          {
-            role: 'user',
-            content: `Risk factors for ${entityType} ${entityId}:\n${factors.map(f => `- ${f.name}: ${f.score.toFixed(1)}/10 (${f.source})`).join('\n')}\n\nOverall trend: ${trend}`,
-          },
-        ],
-        max_tokens: 150,
+      const response = await llmComplete({
+        systemPrompt: 'You are a supply chain risk analyst. Provide a brief 2-3 sentence analysis of the risk factors.',
+        prompt: `Risk factors for ${entityType} ${entityId}:\n${factors.map(f => `- ${f.name}: ${f.score.toFixed(1)}/10 (${f.source})`).join('\n')}\n\nOverall trend: ${trend}`,
+        maxTokens: 150,
+        temperature: 0.5,
       });
-      aiAnalysis = response.choices[0]?.message?.content || undefined;
+      aiAnalysis = response.text || undefined;
     } catch (error) {
       console.error('AI analysis failed:', error);
     }

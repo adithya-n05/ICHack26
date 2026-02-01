@@ -8,6 +8,8 @@ import { initializeSchema } from './graph/schema';
 import { initializeEventEmitter } from './services/eventEmitter';
 import { initializeAlertService } from './services/alertService';
 import { startJobs } from './jobs';
+import { startAgentSystem, stopAgentSystem, getAgentSystemStatus } from './agents';
+import { getLLMStatus, switchToHuggingFace, resetToOpenAI } from './services/llmService';
 import companiesRouter from './routes/companies';
 import suppliersRouter from './routes/suppliers';
 import connectionsRouter from './routes/connections';
@@ -90,6 +92,32 @@ app.get('/health', async (req, res) => {
   }
 });
 
+// Agent System Status endpoint
+app.get('/api/agents/status', (req, res) => {
+  try {
+    const status = getAgentSystemStatus();
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get agent status' });
+  }
+});
+
+// LLM Service Status endpoint
+app.get('/api/llm/status', (req, res) => {
+  res.json(getLLMStatus());
+});
+
+// Switch LLM provider (for testing)
+app.post('/api/llm/switch-to-huggingface', (req, res) => {
+  switchToHuggingFace();
+  res.json({ message: 'Switched to Hugging Face', status: getLLMStatus() });
+});
+
+app.post('/api/llm/reset-to-openai', (req, res) => {
+  resetToOpenAI();
+  res.json({ message: 'Reset to OpenAI', status: getLLMStatus() });
+});
+
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
@@ -107,5 +135,33 @@ server.listen(PORT, async () => {
     console.warn('Knowledge graph initialization skipped:', err);
   }
   
+  // Start legacy cron jobs
   startJobs();
+  
+  // Start Multi-Agent System
+  try {
+    await startAgentSystem(io);
+    console.log('Multi-Agent System operational');
+  } catch (err) {
+    console.error('Multi-Agent System failed to start:', err);
+  }
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  await stopAgentSystem();
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT received, shutting down gracefully...');
+  await stopAgentSystem();
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });

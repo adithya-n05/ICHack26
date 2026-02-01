@@ -5,6 +5,13 @@
 import { runQuery } from '../lib/neo4j';
 import { getDriver } from '../lib/neo4j';
 
+// Utility to convert Neo4j BigInt to Number
+function toNumber(value: any): number {
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value === 'number') return value;
+  return 0;
+}
+
 export interface RiskScore {
   entityId: string;
   entityType: 'company' | 'port' | 'route' | 'country';
@@ -294,7 +301,8 @@ export async function calculatePortRisk(portId: string): Promise<RiskScore | nul
     }
 
     // Factor 2: Concentration risk (how many routes depend on this port)
-    const routeCount = data.routeCount || 0;
+    // Convert BigInt to Number if needed (Neo4j can return BigInt)
+    const routeCount = toNumber(data.routeCount);
     if (routeCount > 5) {
       factors.push({
         type: 'concentration',
@@ -410,7 +418,8 @@ export async function calculateCountryRisk(countryCode: string): Promise<RiskSco
     }
 
     // Factor 3: Supply chain importance
-    const entityCount = data.entityCount || 0;
+    // Convert BigInt to Number if needed (Neo4j can return BigInt)
+    const entityCount = toNumber(data.entityCount);
     if (entityCount > 3) {
       factors.push({
         type: 'concentration',

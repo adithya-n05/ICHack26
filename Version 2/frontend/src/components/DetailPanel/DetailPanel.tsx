@@ -67,6 +67,39 @@ interface ConnectionRiskDetails {
   lastUpdated: string;
 }
 
+interface MitigationAction {
+  id: string;
+  type: 'immediate' | 'short-term' | 'long-term';
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  title: string;
+  description: string;
+  estimatedImpact: number;
+  estimatedCost?: string;
+  timeToImplement?: string;
+}
+
+interface MitigationPlan {
+  entityId: string;
+  entityName: string;
+  entityType: string;
+  actions: MitigationAction[];
+  alternativeSuppliers: Array<{
+    id: string;
+    name: string;
+    country: string;
+    riskScore: number;
+    similarity: number;
+  }>;
+  alternativeRoutes: Array<{
+    path: string[];
+    totalDistance: number;
+    estimatedTime: number;
+    riskScore: number;
+  }>;
+  estimatedRiskReduction: number;
+  generatedAt: string;
+}
+
 interface DetailPanelProps {
   selectedNode: Company | null;
   selectedConnection: Connection | null;
@@ -133,8 +166,11 @@ function ConnectionPanel({
   onClose: () => void;
 }) {
   const [riskDetails, setRiskDetails] = useState<ConnectionRiskDetails | null>(null);
+  const [mitigation, setMitigation] = useState<MitigationPlan | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mitigationLoading, setMitigationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showMitigation, setShowMitigation] = useState(false);
 
   useEffect(() => {
     async function fetchRisk() {
@@ -158,6 +194,22 @@ function ConnectionPanel({
 
     fetchRisk();
   }, [connection.id]);
+
+  const fetchMitigation = async () => {
+    setMitigationLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/connections/${connection.id}/mitigation`);
+      if (response.ok) {
+        const data = await response.json();
+        setMitigation(data);
+        setShowMitigation(true);
+      }
+    } catch (err) {
+      console.error('Error fetching mitigation:', err);
+    } finally {
+      setMitigationLoading(false);
+    }
+  };
 
   return (
     <aside
@@ -334,6 +386,140 @@ function ConnectionPanel({
         <div className="mt-4 px-3 py-2 bg-accent-cyan/20 border border-accent-cyan rounded">
           <span className="text-accent-cyan text-xs font-mono">YOUR SUPPLY CHAIN</span>
         </div>
+      )}
+
+      {/* Mitigation Section - Shows for high-risk routes */}
+      {riskDetails && riskDetails.riskScore >= 40 && (
+        <section className="mt-4 pt-4 border-t border-border-color">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-accent-orange text-xs font-mono uppercase tracking-wider flex items-center gap-2">
+              <span>⚠️</span> Mitigation Options
+            </h3>
+            {!showMitigation && (
+              <button
+                onClick={fetchMitigation}
+                disabled={mitigationLoading}
+                className="px-3 py-1 bg-accent-orange/20 text-accent-orange text-xs rounded hover:bg-accent-orange/30 transition-colors disabled:opacity-50"
+              >
+                {mitigationLoading ? 'Loading...' : 'Get Plan'}
+              </button>
+            )}
+          </div>
+
+          {showMitigation && mitigation && (
+            <div className="space-y-3">
+              {/* Risk Reduction Estimate */}
+              <div className="bg-accent-green/10 border border-accent-green/30 rounded p-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-text-secondary text-xs">Estimated Risk Reduction</span>
+                  <span className="text-accent-green font-mono text-sm font-bold">
+                    -{mitigation.estimatedRiskReduction}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Recommended Actions */}
+              {mitigation.actions.length > 0 && (
+                <div>
+                  <h4 className="text-text-secondary text-xs mb-2">Recommended Actions</h4>
+                  <div className="space-y-2">
+                    {mitigation.actions.slice(0, 4).map((action) => (
+                      <div
+                        key={action.id}
+                        className={`p-2 rounded text-xs ${
+                          action.priority === 'critical' ? 'bg-accent-red/10 border border-accent-red/30' :
+                          action.priority === 'high' ? 'bg-accent-orange/10 border border-accent-orange/30' :
+                          'bg-bg-tertiary'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono uppercase ${
+                            action.type === 'immediate' ? 'bg-accent-red/20 text-accent-red' :
+                            action.type === 'short-term' ? 'bg-accent-orange/20 text-accent-orange' :
+                            'bg-accent-amber/20 text-accent-amber'
+                          }`}>
+                            {action.type}
+                          </span>
+                          <div className="flex-1">
+                            <p className="text-text-primary font-medium">{action.title}</p>
+                            <p className="text-text-secondary mt-1">{action.description}</p>
+                            {action.estimatedImpact > 0 && (
+                              <p className="text-accent-green mt-1">
+                                Impact: -{action.estimatedImpact}% risk
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Alternative Suppliers */}
+              {mitigation.alternativeSuppliers.length > 0 && (
+                <div>
+                  <h4 className="text-text-secondary text-xs mb-2">Alternative Suppliers</h4>
+                  <div className="space-y-1">
+                    {mitigation.alternativeSuppliers.slice(0, 3).map((supplier) => (
+                      <div
+                        key={supplier.id}
+                        className="flex justify-between items-center p-2 bg-bg-tertiary rounded text-xs"
+                      >
+                        <div>
+                          <span className="text-text-primary">{supplier.name}</span>
+                          <span className="text-text-secondary ml-2">({supplier.country})</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className={`font-mono ${
+                            supplier.riskScore <= 30 ? 'text-accent-green' :
+                            supplier.riskScore <= 60 ? 'text-accent-amber' : 'text-accent-red'
+                          }`}>
+                            {supplier.riskScore}/100
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Alternative Routes */}
+              {mitigation.alternativeRoutes.length > 0 && (
+                <div>
+                  <h4 className="text-text-secondary text-xs mb-2">Alternative Routes</h4>
+                  <div className="space-y-1">
+                    {mitigation.alternativeRoutes.slice(0, 2).map((route, i) => (
+                      <div
+                        key={i}
+                        className="p-2 bg-bg-tertiary rounded text-xs"
+                      >
+                        <div className="flex justify-between items-center">
+                          <span className="text-text-primary">
+                            {route.path.join(' → ')}
+                          </span>
+                          <span className={`font-mono ${
+                            route.riskScore <= 30 ? 'text-accent-green' :
+                            route.riskScore <= 60 ? 'text-accent-amber' : 'text-accent-red'
+                          }`}>
+                            {Math.round(route.riskScore)}/100
+                          </span>
+                        </div>
+                        <div className="text-text-secondary mt-1">
+                          {route.totalDistance}km • ~{route.estimatedTime}h
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <p className="text-text-secondary text-[10px] mt-2">
+                Generated: {formatTimestamp(mitigation.generatedAt)}
+              </p>
+            </div>
+          )}
+        </section>
       )}
 
       {riskDetails?.lastUpdated && (

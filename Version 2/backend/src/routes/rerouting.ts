@@ -8,6 +8,11 @@ import {
   getChokepointRisks,
   ReroutingOptions,
 } from '../services/rerouting';
+import {
+  getRouteMitigation,
+  getChokepointMitigation,
+  findAlternativeRoutes,
+} from '../services/mitigationAgent';
 
 const router = Router();
 
@@ -241,6 +246,169 @@ router.post('/compare', async (req, res) => {
   } catch (err) {
     console.error('Route comparison error:', err);
     res.status(500).json({ error: 'Failed to compare routes' });
+  }
+});
+
+/**
+ * POST /api/rerouting/mitigate
+ * Get specific mitigation options for a disrupted route
+ * 
+ * Body:
+ * {
+ *   from: string,           // Origin port
+ *   to: string,             // Destination port
+ *   disruption?: {
+ *     eventType: string,    // e.g., "conflict", "weather", "port_closure"
+ *     eventLocation: string, // e.g., "Red Sea", "Suez Canal", "Taiwan Strait"
+ *     affectedChokepoint?: string, // e.g., "suez", "malacca"
+ *     severity: number       // 1-10
+ *   }
+ * }
+ */
+router.post('/mitigate', async (req, res) => {
+  try {
+    const { from, to, disruption } = req.body;
+    
+    if (!from || !to) {
+      return res.status(400).json({ 
+        error: 'Both "from" and "to" parameters are required' 
+      });
+    }
+    
+    const result = await getRouteMitigation(from, to, disruption);
+    
+    // Format response with specific route suggestions
+    res.json({
+      originalRoute: result.originalRoute,
+      disruption: result.disruption,
+      urgency: result.urgency,
+      recommendation: result.recommendation,
+      alternatives: result.alternatives.map(alt => ({
+        id: alt.id,
+        route: alt.path.map(p => p.name).join(' → '),
+        routeDetails: alt.path,
+        transportMode: alt.transportMode,
+        totalHops: alt.totalHops,
+        estimatedTimeDays: Math.round(alt.estimatedTimeHours / 24),
+        estimatedTimeHours: alt.estimatedTimeHours,
+        totalDistanceKm: alt.totalDistanceKm,
+        riskScore: alt.riskScore,
+        chokepoints: alt.chokepoints,
+        avoidedRisks: alt.avoidedRisks,
+        recommendation: alt.recommendation,
+      })),
+      alternativeCount: result.alternatives.length,
+    });
+  } catch (err) {
+    console.error('Route mitigation error:', err);
+    res.status(500).json({ error: 'Failed to get route mitigation options' });
+  }
+});
+
+/**
+ * POST /api/rerouting/chokepoint-mitigation
+ * Get mitigation options when a specific chokepoint is disrupted
+ * 
+ * Body:
+ * {
+ *   chokepointId: string,   // e.g., "suez", "malacca", "panama"
+ *   affectedRoutes: Array<{ from: string, to: string }>
+ * }
+ */
+router.post('/chokepoint-mitigation', async (req, res) => {
+  try {
+    const { chokepointId, affectedRoutes } = req.body;
+    
+    if (!chokepointId) {
+      return res.status(400).json({ error: 'chokepointId is required' });
+    }
+    
+    if (!Array.isArray(affectedRoutes) || affectedRoutes.length === 0) {
+      return res.status(400).json({ error: 'affectedRoutes array is required' });
+    }
+    
+    const result = await getChokepointMitigation(chokepointId, affectedRoutes);
+    
+    res.json({
+      chokepoint: result.chokepoint,
+      riskLevel: Math.round(result.riskLevel * 100),
+      standardAlternatives: result.standardAlternatives,
+      affectedRouteCount: result.reroutedShipments.length,
+      reroutedShipments: result.reroutedShipments.map(rs => ({
+        original: rs.original,
+        recommendedAction: rs.recommendation,
+        alternativeRoute: rs.alternative ? {
+          route: rs.alternative.path.map(p => p.name).join(' → '),
+          transportMode: rs.alternative.transportMode,
+          estimatedTimeDays: Math.round(rs.alternative.estimatedTimeHours / 24),
+          riskScore: rs.alternative.riskScore,
+        } : null,
+      })),
+    });
+  } catch (err) {
+    console.error('Chokepoint mitigation error:', err);
+    res.status(500).json({ error: 'Failed to get chokepoint mitigation' });
+  }
+});
+
+/**
+ * GET /api/rerouting/alternatives
+ * Quick query for alternative routes with simplified response
+ * 
+ * Query params:
+ * - from: Origin port
+ * - to: Destination port
+ * - avoid: Comma-separated list of chokepoints or countries to avoid
+ * - includeAir: Include air freight option (true/false)
+ */
+router.get('/alternatives', async (req, res) => {
+  try {
+    const { from, to, avoid, includeAir } = req.query;
+    
+    if (!from || !to) {
+      return res.status(400).json({ 
+        error: 'Both "from" and "to" parameters are required' 
+      });
+    }
+    
+    const avoidList = avoid ? (avoid as string).split(',').map(s => s.trim()) : [];
+    
+    // Separate chokepoints from country codes (chokepoints are lowercase, countries are uppercase)
+    const excludeChokepoints = avoidList.filter(a => a === a.toLowerCase());
+    const excludeCountries = avoidList.filter(a => a === a.toUpperCase());
+    
+    const alternatives = await findAlternativeRoutes(
+      from as string,
+      to as string,
+      {
+        excludeChokepoints,
+        excludeCountries,
+        includeAirFreight: includeAir === 'true',
+      }
+    );
+    
+    res.json({
+      from,
+      to,
+      avoided: avoidList,
+      alternatives: alternatives.map(alt => ({
+        route: alt.path.map(p => p.name).join(' → '),
+        routeDetails: alt.path.map(p => ({ name: p.name, country: p.country })),
+        transportMode: alt.transportMode,
+        estimatedDays: Math.round(alt.estimatedTimeHours / 24),
+        riskScore: alt.riskScore,
+        score: alt.recommendation.score,
+        reasons: alt.recommendation.reasons,
+        concerns: alt.recommendation.concerns,
+      })),
+      count: alternatives.length,
+      bestRecommendation: alternatives.length > 0 
+        ? `Use ${alternatives[0].path.map(p => p.name).join(' → ')} (Score: ${alternatives[0].recommendation.score}/100)`
+        : 'No alternatives found',
+    });
+  } catch (err) {
+    console.error('Alternatives query error:', err);
+    res.status(500).json({ error: 'Failed to find alternatives' });
   }
 });
 

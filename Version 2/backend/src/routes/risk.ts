@@ -31,6 +31,7 @@ import {
   getGlobalFeatureImportance,
   whatIfAnalysis,
 } from '../services/explainability';
+import { messageBus } from '../agents/messageBus';
 
 const router = Router();
 
@@ -59,6 +60,27 @@ router.get('/high-risk', async (req, res) => {
   try {
     const { minScore = 40 } = req.query;
     const entities = await getHighRiskEntities(parseInt(minScore as string));
+    
+    // Notify agents about high-risk entities being queried
+    if (entities.length > 0) {
+      messageBus.publish({
+        type: 'HIGH_RISK_DETECTED',
+        fromAgent: 'api-gateway',
+        toAgent: 'orchestrator',
+        payload: {
+          source: 'user-query',
+          entityCount: entities.length,
+          entities: entities.slice(0, 5).map((e: any) => ({
+            id: e.id,
+            type: e.type,
+            riskScore: e.riskScore,
+          })),
+        },
+        priority: 'normal',
+        requiresAck: false,
+      });
+    }
+    
     res.json(entities);
   } catch (err) {
     console.error('High risk entities error:', err);
@@ -78,6 +100,22 @@ router.get('/company/:id', async (req, res) => {
     
     if (!risk) {
       return res.status(404).json({ error: 'Company not found' });
+    }
+    
+    // Notify agents if high risk
+    if (risk.riskScore >= 50) {
+      messageBus.publish({
+        type: 'HIGH_RISK_DETECTED',
+        fromAgent: 'api-gateway',
+        toAgent: 'orchestrator',
+        payload: {
+          entity: { id, type: 'company' },
+          riskScore: risk,
+          source: 'user-query',
+        },
+        priority: risk.riskScore >= 75 ? 'critical' : 'high',
+        requiresAck: false,
+      });
     }
     
     res.json(risk);
@@ -176,8 +214,10 @@ router.get('/alternatives/routes', async (req, res) => {
     const routes = await findAlternativeRoutes(
       from as string,
       to as string,
-      excluded,
-      parseInt(maxHops as string)
+      {
+        excludeCountries: excluded,
+        maxHops: maxHops ? parseInt(maxHops as string) : 6,
+      }
     );
     
     res.json(routes);
