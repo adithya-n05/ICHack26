@@ -3,6 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { ScatterplotLayer, ArcLayer, PolygonLayer } from '@deck.gl/layers';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { socket } from '../../lib/socket';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -127,6 +128,21 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
         setEvents(data);
       })
       .catch(err => console.error('Failed to load events:', err));
+
+    // Listen for real-time event updates
+    socket.on('new-event', (event: GeoEvent) => {
+      console.log('Received new event:', event.title);
+      setEvents(prev => [event, ...prev]);
+    });
+
+    socket.on('event-update', (updatedEvent: GeoEvent) => {
+      setEvents(prev => prev.map(e => e.id === updatedEvent.id ? updatedEvent : e));
+    });
+
+    return () => {
+      socket.off('new-event');
+      socket.off('event-update');
+    };
   }, []);
 
   // Helper to get node position by ID
