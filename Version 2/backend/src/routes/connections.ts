@@ -31,7 +31,26 @@ router.get('/', async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
-    res.json(data || []);
+    // Transform DB fields to camelCase for frontend
+    const transformed = (data || []).map((conn: any) => ({
+      id: conn.id,
+      fromNodeId: conn.from_node_id,
+      toNodeId: conn.to_node_id,
+      transportMode: conn.transport_mode,
+      status: conn.status,
+      isUserConnection: conn.is_user_connection,
+      materials: conn.materials,
+      description: conn.description,
+      leadTimeDays: conn.lead_time_days,
+      // Keep snake_case versions for backward compatibility
+      from_node_id: conn.from_node_id,
+      to_node_id: conn.to_node_id,
+      transport_mode: conn.transport_mode,
+      is_user_connection: conn.is_user_connection,
+      lead_time_days: conn.lead_time_days,
+    }));
+
+    res.json(transformed);
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }

@@ -7,6 +7,9 @@ mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
+// Debounce delay for batching map updates (ms)
+const MAP_UPDATE_DEBOUNCE = 150;
+
 interface Company {
   id: string;
   name: string;
@@ -55,10 +58,17 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
   const map = useRef<mapboxgl.Map | null>(null);
   const nodesRef = useRef<Company[]>([]);
   const connectionsRef = useRef<Connection[]>([]);
+  const eventsRef = useRef<GeoEvent[]>([]);
+  
+  // Pending events buffer for batching socket updates
+  const pendingNewEvents = useRef<GeoEvent[]>([]);
+  const pendingUpdatedEvents = useRef<Record<string, GeoEvent>>({});
+  const updateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [nodes, setNodes] = useState<Company[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
-  const [events, setEvents] = useState<GeoEvent[]>([]);
+  // events state only used for initial load - map updates happen via refs
+  const [eventsLoaded, setEventsLoaded] = useState(false);
   const [hoveredNode, setHoveredNode] = useState<Company | null>(null);
 
   // Fetch companies from API
@@ -97,23 +107,68 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
       .then(res => res.json())
       .then(data => {
         console.log('Loaded events:', data.length);
-        setEvents(data);
+        eventsRef.current = data;
+        setEventsLoaded(true);
+        // Initial map update after load
+        if (map.current?.isStyleLoaded()) {
+          updateEventSources(map.current);
+        }
       })
       .catch(err => console.error('Failed to load events:', err));
 
-    // Listen for real-time event updates
-    socket.on('new-event', (event: GeoEvent) => {
-      console.log('Received new event:', event.title);
-      setEvents(prev => [event, ...prev]);
-    });
+    // Flush pending batched updates to the map
+    const flushEventUpdates = () => {
+      if (!map.current?.isStyleLoaded()) return;
+      
+      // Apply pending new events
+      if (pendingNewEvents.current.length > 0) {
+        eventsRef.current = [...pendingNewEvents.current, ...eventsRef.current];
+        pendingNewEvents.current = [];
+      }
+      
+      // Apply pending updates
+      const pendingKeys = Object.keys(pendingUpdatedEvents.current);
+      if (pendingKeys.length > 0) {
+        eventsRef.current = eventsRef.current.map(e => 
+          pendingUpdatedEvents.current[e.id] ?? e
+        );
+        pendingUpdatedEvents.current = {};
+      }
+      
+      // Update map sources (doesn't trigger React re-render)
+      updateEventSources(map.current!);
+    };
 
-    socket.on('event-update', (updatedEvent: GeoEvent) => {
-      setEvents(prev => prev.map(e => e.id === updatedEvent.id ? updatedEvent : e));
-    });
+    // Schedule a debounced map update
+    const scheduleMapUpdate = () => {
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current);
+      }
+      updateTimerRef.current = setTimeout(flushEventUpdates, MAP_UPDATE_DEBOUNCE);
+    };
+
+    // Named handlers for proper cleanup - batch events instead of immediate state updates
+    const handleNewEvent = (event: GeoEvent) => {
+      console.log('Received new event:', event.title);
+      pendingNewEvents.current.push(event);
+      scheduleMapUpdate();
+    };
+
+    const handleEventUpdate = (updatedEvent: GeoEvent) => {
+      pendingUpdatedEvents.current[updatedEvent.id] = updatedEvent;
+      scheduleMapUpdate();
+    };
+
+    // Listen for real-time event updates
+    socket.on('new-event', handleNewEvent);
+    socket.on('event-update', handleEventUpdate);
 
     return () => {
-      socket.off('new-event');
-      socket.off('event-update');
+      socket.off('new-event', handleNewEvent);
+      socket.off('event-update', handleEventUpdate);
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current);
+      }
     };
   }, []);
 
@@ -187,8 +242,8 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
       .filter((feature): feature is GeoJSON.Feature<GeoJSON.LineString> => feature !== null);
   }, [connections, getNodePosition]);
 
-  const getEventPointFeatures = useCallback(() => {
-    return events
+  const getEventPointFeatures = useCallback((eventsData: GeoEvent[] = eventsRef.current) => {
+    return eventsData
       .map((event) => {
         const location = getEventPosition(event);
         if (!location) return null;
@@ -208,10 +263,10 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
         };
       })
       .filter((feature): feature is GeoJSON.Feature<GeoJSON.Point> => feature !== null);
-  }, [events, getEventPosition]);
+  }, [getEventPosition]);
 
-  const getEventPolygonFeatures = useCallback(() => {
-    return events
+  const getEventPolygonFeatures = useCallback((eventsData: GeoEvent[] = eventsRef.current) => {
+    return eventsData
       .filter((event) => event.polygon && event.polygon.length >= 3)
       .map((event) => ({
         type: 'Feature' as const,
@@ -227,7 +282,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
           title: event.title,
         },
       }));
-  }, [events]);
+  }, []);
 
   const buildFeatureCollection = useCallback(
     <T extends GeoJSON.Geometry>(features: GeoJSON.Feature<T>[]) => ({
@@ -244,19 +299,30 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
     return labelLayer?.id;
   }, []);
 
+  // Update only event sources - called by debounced socket handler
+  // This doesn't trigger React re-render, preserving map camera state
+  const updateEventSources = useCallback(
+    (mapInstance: mapboxgl.Map) => {
+      const eventsPointSource = mapInstance.getSource('events-points') as mapboxgl.GeoJSONSource | undefined;
+      const eventsPolygonSource = mapInstance.getSource('events-polygons') as mapboxgl.GeoJSONSource | undefined;
+
+      eventsPointSource?.setData(buildFeatureCollection(getEventPointFeatures()));
+      eventsPolygonSource?.setData(buildFeatureCollection(getEventPolygonFeatures()));
+    },
+    [buildFeatureCollection, getEventPointFeatures, getEventPolygonFeatures]
+  );
+
+  // Update all sources - used for nodes/connections which change less frequently
   const updateSourceData = useCallback(
     (mapInstance: mapboxgl.Map) => {
       const nodesSource = mapInstance.getSource('nodes') as mapboxgl.GeoJSONSource | undefined;
       const connectionsSource = mapInstance.getSource('connections') as mapboxgl.GeoJSONSource | undefined;
-      const eventsPointSource = mapInstance.getSource('events-points') as mapboxgl.GeoJSONSource | undefined;
-      const eventsPolygonSource = mapInstance.getSource('events-polygons') as mapboxgl.GeoJSONSource | undefined;
 
       nodesSource?.setData(buildFeatureCollection(getNodeFeatures()));
       connectionsSource?.setData(buildFeatureCollection(getConnectionFeatures()));
-      eventsPointSource?.setData(buildFeatureCollection(getEventPointFeatures()));
-      eventsPolygonSource?.setData(buildFeatureCollection(getEventPolygonFeatures()));
+      updateEventSources(mapInstance);
     },
-    [buildFeatureCollection, getConnectionFeatures, getEventPointFeatures, getEventPolygonFeatures, getNodeFeatures]
+    [buildFeatureCollection, getConnectionFeatures, getNodeFeatures, updateEventSources]
   );
 
   useEffect(() => {
@@ -579,11 +645,19 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
     onNodeClick,
   ]);
 
+  // Update nodes/connections when they change (less frequent, from initial load)
   useEffect(() => {
     if (map.current && map.current.isStyleLoaded()) {
       updateSourceData(map.current);
     }
-  }, [nodes, connections, events, updateSourceData]);
+  }, [nodes, connections, updateSourceData]);
+
+  // Initial event load - only runs once when eventsLoaded becomes true
+  useEffect(() => {
+    if (eventsLoaded && map.current?.isStyleLoaded()) {
+      updateEventSources(map.current);
+    }
+  }, [eventsLoaded, updateEventSources]);
 
   return (
     <div className="relative w-full h-full">

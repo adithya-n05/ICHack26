@@ -185,9 +185,11 @@ export function DetailPanel({ selectedNode, selectedConnection, onClose }: Detai
         <p className="text-text-primary text-sm">
           {selectedNode.city}, {selectedNode.country}
         </p>
-        <p className="text-text-secondary text-xs mt-1">
-          {selectedNode.location.lat.toFixed(4)}, {selectedNode.location.lng.toFixed(4)}
-        </p>
+        {selectedNode.location && (
+          <p className="text-text-secondary text-xs mt-1">
+            {selectedNode.location.lat?.toFixed(4)}, {selectedNode.location.lng?.toFixed(4)}
+          </p>
+        )}
       </section>
 
       <section className="mb-4">
