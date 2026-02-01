@@ -58,8 +58,8 @@ app.use('/api/alternatives', alternativesRouter);
 
 app.get('/health', async (req, res) => {
   try {
-    // Simple query to verify connection
-    const { error } = await supabase.from('_health_check').select('*').limit(1);
+    // Simple query to verify connection against an existing table
+    const { error } = await supabase.from('companies').select('id').limit(1);
     res.json({
       status: 'ok',
       db: error ? 'disconnected' : 'connected',

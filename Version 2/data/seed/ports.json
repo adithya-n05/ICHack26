@@ -1,0 +1,68 @@
+[
+  {
+    "id": "port-kaohsiung",
+    "name": "Port of Kaohsiung",
+    "type": "port",
+    "country": "Taiwan",
+    "city": "Kaohsiung",
+    "lat": 22.6163,
+    "lng": 120.2854,
+    "products": ["shipping", "logistics"],
+    "description": "Taiwan's largest port, key for semiconductor exports"
+  },
+  {
+    "id": "port-busan",
+    "name": "Port of Busan",
+    "type": "port",
+    "country": "South Korea",
+    "city": "Busan",
+    "lat": 35.1028,
+    "lng": 129.0403,
+    "products": ["shipping", "logistics"],
+    "description": "South Korea's largest port"
+  },
+  {
+    "id": "port-longbeach",
+    "name": "Port of Long Beach",
+    "type": "port",
+    "country": "USA",
+    "city": "Long Beach",
+    "lat": 33.7540,
+    "lng": -118.2165,
+    "products": ["shipping", "logistics"],
+    "description": "Major US West Coast port"
+  },
+  {
+    "id": "port-rotterdam",
+    "name": "Port of Rotterdam",
+    "type": "port",
+    "country": "Netherlands",
+    "city": "Rotterdam",
+    "lat": 51.9036,
+    "lng": 4.4994,
+    "products": ["shipping", "logistics"],
+    "description": "Europe's largest port"
+  },
+  {
+    "id": "port-shanghai",
+    "name": "Port of Shanghai",
+    "type": "port",
+    "country": "China",
+    "city": "Shanghai",
+    "lat": 31.3602,
+    "lng": 121.5879,
+    "products": ["shipping", "logistics"],
+    "description": "World's busiest container port"
+  },
+  {
+    "id": "port-singapore",
+    "name": "Port of Singapore",
+    "type": "port",
+    "country": "Singapore",
+    "city": "Singapore",
+    "lat": 1.2644,
+    "lng": 103.8198,
+    "products": ["shipping", "logistics"],
+    "description": "Major Asian transshipment hub"
+  }
+]

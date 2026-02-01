@@ -1,0 +1,34 @@
+[
+  {
+    "id": "conn-tsmc-nvidia",
+    "from_node_id": "tsmc-hsinchu",
+    "to_node_id": "nvidia-santaclara",
+    "status": "active",
+    "material": "chips",
+    "volume": 1000000
+  },
+  {
+    "id": "conn-tsmc-amd",
+    "from_node_id": "tsmc-hsinchu",
+    "to_node_id": "amd-santaclara",
+    "status": "active",
+    "material": "chips",
+    "volume": 800000
+  },
+  {
+    "id": "conn-samsung-qualcomm",
+    "from_node_id": "samsung-hwaseong",
+    "to_node_id": "qualcomm-sandiego",
+    "status": "active",
+    "material": "chips",
+    "volume": 500000
+  },
+  {
+    "id": "conn-asml-tsmc",
+    "from_node_id": "asml-veldhoven",
+    "to_node_id": "tsmc-hsinchu",
+    "status": "active",
+    "material": "EUV machines",
+    "volume": 50
+  }
+]
