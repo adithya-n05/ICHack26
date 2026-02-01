@@ -9,6 +9,12 @@ import { supabase } from '../lib/supabase';
 
 async function saveEvents(events: any[], source: string) {
   for (const event of events) {
+    // Skip events with invalid (0,0) coordinates
+    if (event.location.lat === 0 && event.location.lng === 0) {
+      console.log(`Skipping ${source} event with (0,0) coords:`, event.title);
+      continue;
+    }
+
     // Upsert to avoid duplicates
     const { error } = await supabase.from('events').upsert({
       id: event.id,

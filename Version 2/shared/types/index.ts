@@ -7,4 +7,5 @@ export * from './event';
 export * from './tariff';
 export * from './news';
 export * from './user-supply-chain';
-export * from './risk';
+export * from './taxonomy';
+export * from './path';
