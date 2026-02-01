@@ -36,6 +36,7 @@ interface SupplierFormProps {
 export function SupplierForm({ onSubmit, onSubmitSuccess, onClose }: SupplierFormProps) {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorModal, setErrorModal] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
   const [companyName, setCompanyName] = useState('');
   const [location, setLocation] = useState({ city: '', country: '' });
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -86,14 +87,18 @@ export function SupplierForm({ onSubmit, onSubmitSuccess, onClose }: SupplierFor
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save supply chain');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to save supply chain');
       }
 
       console.log('Supply chain saved successfully');
       onSubmitSuccess?.();
     } catch (error) {
       console.error('Error saving supply chain:', error);
-      alert('Failed to save. Please try again.');
+      setErrorModal({
+        show: true,
+        message: error instanceof Error ? error.message : 'Failed to save. Please try again.',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -336,6 +341,30 @@ export function SupplierForm({ onSubmit, onSubmitSuccess, onClose }: SupplierFor
           {isSubmitting ? 'Saving...' : step === 3 ? 'Submit' : 'Next'}
         </button>
       </div>
+
+      {/* Error Modal */}
+      {errorModal.show && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100]">
+          <div className="bg-bg-secondary border border-accent-red rounded-lg p-6 max-w-md w-full mx-4 shadow-lg">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-accent-red text-2xl">⚠</span>
+              <h3 className="text-text-primary font-mono text-lg">Error</h3>
+            </div>
+            <p className="text-text-primary text-sm mb-6 leading-relaxed">
+              {errorModal.message}
+            </p>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setErrorModal({ show: false, message: '' })}
+                className="px-4 py-2 bg-accent-red text-white rounded font-mono text-sm hover:opacity-90"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }
