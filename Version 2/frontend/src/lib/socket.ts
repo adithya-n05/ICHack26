@@ -10,6 +10,11 @@ export const socket: Socket = io(SOCKET_URL, {
   reconnectionDelay: 1000,
 });
 
+// Export getter function for consistency
+export function getSocket(): Socket {
+  return socket;
+}
+
 socket.on('connect', () => {
   console.log('Socket connected:', socket.id);
 });

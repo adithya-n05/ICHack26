@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { supabase } from '../lib/supabase';
+import { getConnectionRisk } from '../services/connectionRisk';
 
 const router = Router();
 
@@ -53,6 +54,24 @@ router.get('/', async (req, res) => {
     res.json(transformed);
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/connections/:id/risk - Get detailed risk assessment for a connection
+router.get('/:id/risk', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const riskDetails = await getConnectionRisk(id);
+
+    if (!riskDetails) {
+      return res.status(404).json({ error: 'Connection not found or missing location data' });
+    }
+
+    res.json(riskDetails);
+  } catch (err) {
+    console.error('Connection risk error:', err);
+    res.status(500).json({ error: 'Failed to calculate connection risk' });
   }
 });
 

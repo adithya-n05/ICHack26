@@ -6,6 +6,10 @@ import { fetchWeatherAlerts } from '../services/noaa';
 import { fetchNews } from '../services/newsapi';
 import { broadcastNewEvent, broadcastNewNews } from '../services/eventEmitter';
 import { supabase } from '../lib/supabase';
+import { getDriver } from '../lib/neo4j';
+import { syncEvents, fullSync } from '../graph/sync';
+import { checkAndBroadcastAlerts } from '../services/alertService';
+import { updateAllConnectionRisks } from '../services/connectionRisk';
 
 async function saveEvents(events: any[], source: string) {
   for (const event of events) {
@@ -95,6 +99,31 @@ export function startJobs() {
 
   console.log('Cron jobs started');
 
+  // Sync events to knowledge graph every 15 minutes
+  cron.schedule('*/15 * * * *', async () => {
+    if (getDriver()) {
+      console.log('Syncing events to knowledge graph...');
+      await syncEvents();
+      console.log('Knowledge graph events synced');
+      
+      // Check for risk alerts after sync
+      await checkAndBroadcastAlerts();
+    }
+  });
+
+  // Check risk alerts every 5 minutes
+  cron.schedule('*/5 * * * *', async () => {
+    if (getDriver()) {
+      await checkAndBroadcastAlerts();
+    }
+  });
+
+  // Update connection risk statuses every 10 minutes
+  cron.schedule('*/10 * * * *', async () => {
+    console.log('Running connection risk update job...');
+    await updateAllConnectionRisks();
+  });
+
   // Initial fetch on startup
   setTimeout(async () => {
     console.log('Running initial data fetch...');
@@ -110,6 +139,13 @@ export function startJobs() {
     await saveEvents(earthquakes, 'USGS');
     await saveEvents(weatherAlerts, 'NOAA');
     await saveNews(news);
+
+    // Sync to knowledge graph if configured
+    if (getDriver()) {
+      console.log('Initial knowledge graph sync...');
+      // Full sync on startup to populate all nodes (companies, ports, countries) first
+      await fullSync();
+    }
 
     console.log('Initial data fetch complete');
   }, 5000); // Wait 5 seconds for server to fully start

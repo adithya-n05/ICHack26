@@ -45,6 +45,23 @@ type MapConnection = Omit<Connection, 'fromNode' | 'toNode'> & {
   toNode?: MapCompany;
 };
 
+interface GeoEvent {
+  id: string;
+  type: string;
+  title: string;
+  location?: { lat: number; lng: number };
+  lat?: number | null;
+  lng?: number | null;
+  severity: number;
+  polygon?: Array<{ lat: number; lng: number }>;
+  source?: string;
+  description?: string;
+  affected_countries?: string[];
+  affected_regions?: string[];
+  startDate?: string;
+  start_date?: string;
+}
+
 interface NewsItem {
   id: string;
   title: string;
@@ -57,6 +74,7 @@ interface NewsItem {
 function App() {
   const [selectedNode, setSelectedNode] = useState<Company | null>(null);
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<GeoEvent | null>(null);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [mapRefreshKey, setMapRefreshKey] = useState(0);
@@ -115,6 +133,7 @@ function App() {
     }
     console.log('Node clicked:', node.name);
     setSelectedConnection(null);
+    setSelectedEvent(null);
     setSelectedNode(normalizedNode);
   };
 
@@ -123,6 +142,7 @@ function App() {
     const toNode = connection.toNode ? normalizeCompany(connection.toNode) ?? undefined : undefined;
     console.log('Connection clicked:', connection.id);
     setSelectedNode(null);
+    setSelectedEvent(null);
     setSelectedConnection({
       ...connection,
       fromNode,
@@ -130,9 +150,17 @@ function App() {
     });
   };
 
+  const handleEventClick = (event: GeoEvent) => {
+    console.log('Event clicked:', event.title);
+    setSelectedNode(null);
+    setSelectedConnection(null);
+    setSelectedEvent(event);
+  };
+
   const handleClosePanel = () => {
     setSelectedNode(null);
     setSelectedConnection(null);
+    setSelectedEvent(null);
   };
 
   const handleSupplierFormSuccess = () => {
@@ -160,10 +188,12 @@ function App() {
           key={mapRefreshKey}
           onNodeClick={handleNodeClick}
           onConnectionClick={handleConnectionClick}
+          onEventClick={handleEventClick}
         />
         <DetailPanel
           selectedNode={selectedNode}
           selectedConnection={selectedConnection}
+          selectedEvent={selectedEvent}
           onClose={handleClosePanel}
         />
       </div>

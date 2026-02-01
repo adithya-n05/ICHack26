@@ -46,14 +46,21 @@ interface GeoEvent {
   lng?: number | null;
   severity: number;
   polygon?: Array<{ lat: number; lng: number }>;
+  source?: string;
+  description?: string;
+  affected_countries?: string[];
+  affected_regions?: string[];
+  startDate?: string;
+  start_date?: string;
 }
 
 interface MapProps {
   onNodeClick?: (node: Company) => void;
   onConnectionClick?: (connection: Connection & { fromNode?: Company; toNode?: Company }) => void;
+  onEventClick?: (event: GeoEvent) => void;
 }
 
-export function Map({ onNodeClick, onConnectionClick }: MapProps) {
+export function Map({ onNodeClick, onConnectionClick, onEventClick }: MapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const nodesRef = useRef<Company[]>([]);
@@ -70,6 +77,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
   // events state only used for initial load - map updates happen via refs
   const [eventsLoaded, setEventsLoaded] = useState(false);
   const [hoveredNode, setHoveredNode] = useState<Company | null>(null);
+  const [hoveredEvent, setHoveredEvent] = useState<GeoEvent | null>(null);
 
   // Fetch companies from API
   useEffect(() => {
@@ -676,6 +684,25 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
         beforeId
       );
 
+      // Invisible wider hitbox layer for easier clicking on connections
+      mapInstance.addLayer(
+        {
+          id: 'connections-hitbox',
+          type: 'line',
+          source: 'connections',
+          layout: {
+            'line-cap': 'round',
+            'line-join': 'round',
+          },
+          paint: {
+            'line-color': 'rgba(0, 0, 0, 0)',
+            'line-width': 20, // Wide invisible area for click detection
+            'line-opacity': 0,
+          },
+        },
+        beforeId
+      );
+
       mapInstance.addLayer(
         {
           id: 'nodes-glow',
@@ -756,7 +783,8 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
         }
       });
 
-      mapInstance.on('click', 'connections', (event) => {
+      // Use hitbox layer for connection clicks (wider click target)
+      mapInstance.on('click', 'connections-hitbox', (event) => {
         const feature = event.features?.[0];
         const connectionId = feature?.properties?.id as string | undefined;
         if (!connectionId || !onConnectionClick) return;
@@ -767,12 +795,58 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
         onConnectionClick({ ...connection, fromNode, toNode });
       });
 
+      // Cursor change on connection hover
+      mapInstance.on('mouseenter', 'connections-hitbox', () => {
+        mapInstance.getCanvas().style.cursor = 'pointer';
+      });
+      mapInstance.on('mouseleave', 'connections-hitbox', () => {
+        mapInstance.getCanvas().style.cursor = '';
+      });
+
+      // Event point hover handlers
+      mapInstance.on('mouseenter', 'events-points', (event) => {
+        mapInstance.getCanvas().style.cursor = 'pointer';
+        const feature = event.features?.[0];
+        const eventId = feature?.properties?.id as string | undefined;
+        if (eventId) {
+          const geoEvent = eventsRef.current.find((e) => e.id === eventId) || null;
+          setHoveredEvent(geoEvent);
+        }
+      });
+
+      mapInstance.on('mouseleave', 'events-points', () => {
+        mapInstance.getCanvas().style.cursor = '';
+        setHoveredEvent(null);
+      });
+
+      // Event point click handler
+      mapInstance.on('click', 'events-points', (event) => {
+        const feature = event.features?.[0];
+        const eventId = feature?.properties?.id as string | undefined;
+        if (!eventId) return;
+        const geoEvent = eventsRef.current.find((e) => e.id === eventId);
+        if (geoEvent && onEventClick) {
+          onEventClick(geoEvent);
+        }
+      });
+
+      // Event polygon click handler
       mapInstance.on('click', 'events-polygons', (event) => {
         const feature = event.features?.[0];
-        const title = feature?.properties?.title as string | undefined;
-        if (title) {
-          console.log('Event clicked:', title);
+        const eventId = feature?.properties?.id as string | undefined;
+        if (!eventId) return;
+        const geoEvent = eventsRef.current.find((e) => e.id === eventId);
+        if (geoEvent && onEventClick) {
+          onEventClick(geoEvent);
         }
+      });
+
+      // Event polygon hover
+      mapInstance.on('mouseenter', 'events-polygons', () => {
+        mapInstance.getCanvas().style.cursor = 'pointer';
+      });
+      mapInstance.on('mouseleave', 'events-polygons', () => {
+        mapInstance.getCanvas().style.cursor = '';
       });
     });
 
@@ -788,6 +862,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
     getNodeFeatures,
     labelLayerId,
     onConnectionClick,
+    onEventClick,
     onNodeClick,
   ]);
 
@@ -811,6 +886,21 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
       {hoveredNode && (
         <div className="absolute top-4 left-4 bg-bg-secondary px-3 py-2 rounded border border-border-color">
           <span className="text-accent-cyan font-mono text-sm">{hoveredNode.name}</span>
+        </div>
+      )}
+      {hoveredEvent && !hoveredNode && (
+        <div className="absolute top-4 left-4 bg-bg-secondary px-3 py-2 rounded border border-border-color max-w-xs">
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`w-2 h-2 rounded-full ${
+              hoveredEvent.severity >= 7 ? 'bg-accent-red' :
+              hoveredEvent.severity >= 4 ? 'bg-accent-orange' : 'bg-accent-amber'
+            }`}></span>
+            <span className="text-text-secondary text-xs uppercase font-mono">
+              {hoveredEvent.type.replace('_', ' ')}
+            </span>
+          </div>
+          <span className="text-text-primary font-mono text-sm line-clamp-2">{hoveredEvent.title}</span>
+          <div className="text-text-secondary text-xs mt-1">Severity: {hoveredEvent.severity}/10</div>
         </div>
       )}
     </div>
