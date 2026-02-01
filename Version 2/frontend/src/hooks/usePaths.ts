@@ -55,11 +55,11 @@ export function usePaths(companyId: string | null) {
         if (!isMounted) return;
         const nextPath = data?.path
           ? {
-              id: data.path.id,
-              companyId: data.path.companyId ?? data.path.company_id,
-              productCategory: data.path.productCategory ?? data.path.product_category,
-              status: data.path.status,
-            }
+            id: data.path.id,
+            companyId: data.path.companyId ?? data.path.company_id,
+            productCategory: data.path.productCategory ?? data.path.product_category,
+            status: data.path.status,
+          }
           : null;
 
         const nextEdges = (data?.edges || []).map((edge: any) => ({

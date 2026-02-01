@@ -48,9 +48,9 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const TRANSPORT_ICONS: Record<string, string> = {
-  sea: '🚢',
-  air: '✈️',
-  land: '🚛',
+  sea: '⛴︎',
+  air: '✈︎',
+  land: '⛟',
 };
 
 const formatRevenue = (revenue?: number) => {
@@ -93,14 +93,29 @@ export function DetailPanel({
           <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
             Route
           </h3>
-          <div className="flex items-center gap-2">
-            <span className="text-text-primary text-sm font-bold">
-              {selectedConnection.fromNode?.name || selectedConnection.from_node_id}
-            </span>
-            <span className="text-text-secondary">→</span>
-            <span className="text-text-primary text-sm font-bold">
-              {selectedConnection.toNode?.name || selectedConnection.to_node_id}
-            </span>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-text-primary text-sm font-bold">
+                {selectedConnection.fromNode?.name || selectedConnection.from_node_id}
+              </span>
+              <span className="text-text-secondary">→</span>
+              <span className="text-text-primary text-sm font-bold">
+                {selectedConnection.toNode?.name || selectedConnection.to_node_id}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-text-secondary text-xs">
+              <span>
+                {selectedConnection.fromNode
+                  ? `${selectedConnection.fromNode.city}, ${selectedConnection.fromNode.country}`
+                  : 'Location unavailable'}
+              </span>
+              <span>→</span>
+              <span>
+                {selectedConnection.toNode
+                  ? `${selectedConnection.toNode.city}, ${selectedConnection.toNode.country}`
+                  : 'Location unavailable'}
+              </span>
+            </div>
           </div>
         </section>
 
@@ -109,7 +124,9 @@ export function DetailPanel({
             Transport Mode
           </h3>
           <span className="inline-flex items-center gap-2 px-2 py-1 bg-bg-tertiary text-text-primary text-sm rounded">
-            <span>{TRANSPORT_ICONS[selectedConnection.transport_mode] || '📦'}</span>
+            <span className="text-text-secondary">
+              {TRANSPORT_ICONS[selectedConnection.transport_mode] || '⬡'}
+            </span>
             <span className="capitalize">{selectedConnection.transport_mode}</span>
           </span>
         </section>
