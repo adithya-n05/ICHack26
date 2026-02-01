@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+@theme {
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  --color-bg-primary: #0a0a14;
+  --color-bg-secondary: #111827;
+  --color-bg-tertiary: #1e293b;
+  --color-cyan: #22d3ee;
+  --color-cyan-glow: #06b6d4;
+  --color-amber: #fbbf24;
+  --color-red: #ef4444;
+  --color-green: #22c55e;
+  --color-purple: #a855f7;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--color-bg-primary);
+  font-family: var(--font-mono);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-bg-tertiary);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Mapbox overrides */
+.mapboxgl-popup-content {
+  background: rgba(30, 41, 59, 0.95) !important;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  border-radius: 8px;
+  padding: 0 !important;
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.2);
+}
+
+.mapboxgl-popup-tip {
+  border-top-color: rgba(30, 41, 59, 0.95) !important;
+}
+
+.mapboxgl-popup-close-button {
+  color: #94a3b8;
+  font-size: 18px;
+  padding: 4px 8px;
+}
+
+.mapboxgl-popup-close-button:hover {
+  color: #22d3ee;
+  background: transparent;
+}
+
+.mapboxgl-ctrl-attrib {
+  display: none !important;
+}
+
+/* Glow animations */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px currentColor, 0 0 10px currentColor;
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 20px currentColor, 0 0 40px currentColor;
+    opacity: 0.8;
+  }
+}
+
+@keyframes route-pulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes scan-line {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100vh);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-route-pulse {
+  animation: route-pulse 1.5s ease-in-out infinite;
+}
+
+/* Gradient text */
+.text-gradient {
+  background: linear-gradient(135deg, #22d3ee, #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glass effect */
+.glass {
+  background: rgba(30, 41, 59, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}

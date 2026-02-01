@@ -8,6 +8,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "seed": "npx ts-node src/scripts/seed.ts",
+    "ingest": "npx ts-node src/scripts/ingest.ts",
+    "ingest:generated": "npx ts-node src/scripts/ingestGenerated.ts",
+    "ingest:openai": "npx ts-node src/scripts/ingestOpenAI.ts",
     "test": "vitest run"
   },
   "keywords": [],
@@ -15,13 +18,17 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@turf/boolean-point-in-polygon": "^7.2.0",
+    "@turf/helpers": "^7.2.0",
+    "@turf/point-to-line-distance": "^7.2.0",
+    "@turf/polygon-to-line": "^7.2.0",
     "@supabase/supabase-js": "^2.93.3",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "node-cron": "^4.2.1",
-    "pg": "^8.18.0",
-    "redis": "^5.10.0",
+    "zod": "^4.1.0",
+    "openai": "^6.17.0",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
@@ -29,6 +36,8 @@
     "@types/express": "^5.0.6",
     "@types/node": "^25.1.0",
     "@types/node-cron": "^3.0.11",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.2.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"

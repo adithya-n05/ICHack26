@@ -25,6 +25,16 @@ interface Connection {
   toNode?: Company;
 }
 
+interface PathEdge {
+  id: string;
+  status: string;
+  fromNodeId?: string;
+  toNodeId?: string;
+  from_node_id?: string;
+  to_node_id?: string;
+  materials?: string[];
+}
+
 interface DetailPanelProps {
   selectedNode: Company | null;
   selectedConnection: Connection | null;
@@ -32,6 +42,10 @@ interface DetailPanelProps {
   riskCategory?: string | null;
   riskLoading?: boolean;
   onClose: () => void;
+  alternativeSuppliers?: Company[];
+  riskyPathEdge?: PathEdge | null;
+  alternativesLoading?: boolean;
+  alternativesError?: string | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -43,9 +57,9 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const TRANSPORT_ICONS: Record<string, string> = {
-  sea: '🚢',
-  air: '✈️',
-  land: '🚛',
+  sea: '⛴︎',
+  air: '✈︎',
+  land: '⛟',
 };
 
 const formatRevenue = (revenue?: number) => {
@@ -62,9 +76,16 @@ export function DetailPanel({
   riskCategory,
   riskLoading,
   onClose,
+  alternativeSuppliers = [],
+  riskyPathEdge = null,
+  alternativesLoading = false,
+  alternativesError = null,
 }: DetailPanelProps) {
   // Show connection panel if connection selected
   if (selectedConnection) {
+    const showAlternatives =
+      ['monitoring', 'at-risk', 'critical', 'disrupted'].includes(selectedConnection.status) &&
+      alternativeSuppliers.length > 0;
     return (
       <aside
         data-testid="detail-panel"
@@ -87,14 +108,29 @@ export function DetailPanel({
           <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
             Route
           </h3>
-          <div className="flex items-center gap-2">
-            <span className="text-text-primary text-sm font-bold">
-              {selectedConnection.fromNode?.name || selectedConnection.from_node_id}
-            </span>
-            <span className="text-text-secondary">→</span>
-            <span className="text-text-primary text-sm font-bold">
-              {selectedConnection.toNode?.name || selectedConnection.to_node_id}
-            </span>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-text-primary text-sm font-bold">
+                {selectedConnection.fromNode?.name || selectedConnection.from_node_id}
+              </span>
+              <span className="text-text-secondary">→</span>
+              <span className="text-text-primary text-sm font-bold">
+                {selectedConnection.toNode?.name || selectedConnection.to_node_id}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-text-secondary text-xs">
+              <span>
+                {selectedConnection.fromNode
+                  ? `${selectedConnection.fromNode.city}, ${selectedConnection.fromNode.country}`
+                  : 'Location unavailable'}
+              </span>
+              <span>→</span>
+              <span>
+                {selectedConnection.toNode
+                  ? `${selectedConnection.toNode.city}, ${selectedConnection.toNode.country}`
+                  : 'Location unavailable'}
+              </span>
+            </div>
           </div>
         </section>
 
@@ -103,7 +139,9 @@ export function DetailPanel({
             Transport Mode
           </h3>
           <span className="inline-flex items-center gap-2 px-2 py-1 bg-bg-tertiary text-text-primary text-sm rounded">
-            <span>{TRANSPORT_ICONS[selectedConnection.transport_mode] || '📦'}</span>
+            <span className="text-text-secondary">
+              {TRANSPORT_ICONS[selectedConnection.transport_mode] || '⬡'}
+            </span>
             <span className="capitalize">{selectedConnection.transport_mode}</span>
           </span>
         </section>
@@ -117,6 +155,22 @@ export function DetailPanel({
             <span className="text-text-primary text-sm capitalize">{selectedConnection.status}</span>
           </div>
         </section>
+
+        {(riskLoading || riskCategory) && (
+          <section className="mb-4">
+            <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+              Risk Category
+            </h3>
+            <div className="flex items-center gap-2">
+              <span
+                className={`w-3 h-3 rounded-full ${STATUS_COLORS[riskCategory || 'healthy'] || 'bg-gray-500'}`}
+              ></span>
+              <span className="text-text-primary text-sm capitalize">
+                {riskLoading ? 'Loading risk category...' : riskCategory || 'unknown'}
+              </span>
+            </div>
+          </section>
+        )}
 
         {(riskLoading || riskReason || riskCategory) && (
           <section className="mb-4">
@@ -174,12 +228,41 @@ export function DetailPanel({
             <span className="text-accent-cyan text-xs font-mono">YOUR SUPPLY CHAIN</span>
           </div>
         )}
+
+        {showAlternatives && (
+          <section className="mt-6">
+            <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+              Alternative Suppliers
+            </h3>
+            <div className="space-y-2">
+              {alternativeSuppliers.map((supplier) => (
+                <div
+                  key={supplier.id}
+                  className="flex items-center justify-between px-2 py-2 bg-bg-tertiary rounded"
+                >
+                  <div>
+                    <p className="text-text-primary text-sm font-bold">{supplier.name}</p>
+                    {supplier.country && (
+                      <p className="text-text-secondary text-xs">
+                        {supplier.city ? `${supplier.city}, ` : ''}
+                        {supplier.country}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-accent-green text-xs font-mono">ALT</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </aside>
     );
   }
 
   // Show node panel if node selected
   if (!selectedNode) return null;
+  const showAlternatives =
+    alternativesLoading || Boolean(alternativesError) || alternativeSuppliers.length > 0;
 
   return (
     <aside
@@ -293,6 +376,53 @@ export function DetailPanel({
           <p className="text-text-primary text-sm leading-relaxed">
             {riskLoading ? 'Loading risk reason...' : riskReason || 'No risk reason available.'}
           </p>
+        </section>
+      )}
+
+      {showAlternatives && (
+        <section className="mb-4">
+          <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+            Alternative Suppliers
+          </h3>
+          {riskyPathEdge && (
+            <p className="text-text-secondary text-xs mb-2">
+              Trigger: {riskyPathEdge.fromNodeId || riskyPathEdge.from_node_id} →{' '}
+              {riskyPathEdge.toNodeId || riskyPathEdge.to_node_id} ({riskyPathEdge.status})
+            </p>
+          )}
+          {alternativesLoading && (
+            <p className="text-text-secondary text-xs">Loading alternatives...</p>
+          )}
+          {alternativesError && (
+            <p className="text-accent-orange text-xs">Failed to load alternatives.</p>
+          )}
+          {alternativeSuppliers.length > 0 && (
+            <div className="space-y-2">
+              {alternativeSuppliers.slice(0, 5).map((supplier) => (
+                <div
+                  key={supplier.id}
+                  className="px-2 py-2 bg-bg-tertiary border border-border-color rounded"
+                >
+                  <div className="text-text-primary text-sm font-mono">{supplier.name}</div>
+                  <div className="text-text-secondary text-xs">
+                    {supplier.city}, {supplier.country}
+                  </div>
+                  {supplier.products && supplier.products.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {supplier.products.slice(0, 3).map((product, i) => (
+                        <span
+                          key={i}
+                          className="px-2 py-0.5 bg-bg-primary text-text-secondary text-[10px] rounded"
+                        >
+                          {product}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       )}
     </aside>

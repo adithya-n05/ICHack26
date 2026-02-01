@@ -34,6 +34,35 @@ function calculateSeverity(tone: number): number {
   return severity;
 }
 
+function parseGdeltDate(value?: string): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const parsed = Date.parse(trimmed);
+  if (!Number.isNaN(parsed)) {
+    return new Date(parsed).toISOString();
+  }
+
+  // Handle GDELT formats like YYYYMMDDHHMMSS or YYYYMMDDTHHMMSSZ
+  const digits = trimmed.replace(/[^\d]/g, '');
+  if (digits.length >= 8) {
+    const year = digits.slice(0, 4);
+    const month = digits.slice(4, 6);
+    const day = digits.slice(6, 8);
+    const hour = digits.slice(8, 10) || '00';
+    const minute = digits.slice(10, 12) || '00';
+    const second = digits.slice(12, 14) || '00';
+    const iso = `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
+    const isoParsed = Date.parse(iso);
+    if (!Number.isNaN(isoParsed)) {
+      return new Date(isoParsed).toISOString();
+    }
+  }
+
+  return null;
+}
+
 const MIN_REQUEST_INTERVAL_MS = 5000;
 let lastFetchAt = 0;
 
@@ -74,7 +103,9 @@ export async function fetchGdeltEvents(): Promise<GdeltEvent[]> {
     return articles.map((article: any) => {
       // Get coordinates from country code, with fallback to (0,0)
       const coords = getCountryCoordinates(article.sourcecountry) || { lat: 0, lng: 0 };
-      
+
+      const normalizedDate = parseGdeltDate(article.seendate) || new Date().toISOString();
+
       return {
         id: `gdelt-${article.url ? Buffer.from(article.url).toString('base64').slice(0, 20) : Date.now()}`,
         type: categorizeEvent(article.title || ''),
@@ -82,7 +113,7 @@ export async function fetchGdeltEvents(): Promise<GdeltEvent[]> {
         description: article.seendate || '',
         location: coords,
         severity: calculateSeverity(article.tone || 0),
-        startDate: article.seendate || new Date().toISOString(),
+        startDate: normalizedDate,
         source: 'GDELT',
         url: article.url,
       };
