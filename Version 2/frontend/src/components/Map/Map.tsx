@@ -1,7 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
-import { MapboxOverlay } from '@deck.gl/mapbox';
-import { ScatterplotLayer, ArcLayer, PolygonLayer } from '@deck.gl/layers';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { socket } from '../../lib/socket';
 
@@ -47,40 +45,6 @@ interface GeoEvent {
   polygon?: Array<{ lat: number; lng: number }>;
 }
 
-type HeatmapEvent = GeoEvent & { contour: Array<[number, number]> };
-
-const EVENT_COLORS: Record<string, [number, number, number, number]> = {
-  war: [255, 0, 0, 150],
-  natural_disaster: [255, 102, 0, 150],
-  weather: [0, 170, 255, 150],
-  geopolitical: [153, 0, 255, 150],
-  tariff: [255, 204, 0, 150],
-  infrastructure: [204, 204, 204, 150],
-};
-
-const CONNECTION_STATUS_COLORS: Record<string, [number, number, number, number]> = {
-  healthy: [224, 224, 224, 200],
-  monitoring: [255, 204, 0, 200],
-  'at-risk': [255, 102, 0, 200],
-  critical: [255, 0, 0, 200],
-  disrupted: [139, 0, 0, 200],
-};
-
-function createCirclePolygon(
-  center: { lat: number; lng: number },
-  radiusKm: number,
-  points: number = 32
-): Array<[number, number]> {
-  const coords: Array<[number, number]> = [];
-  for (let i = 0; i <= points; i++) {
-    const angle = (i / points) * 2 * Math.PI;
-    const dx = radiusKm * Math.cos(angle) / 111;
-    const dy = radiusKm * Math.sin(angle) / 111;
-    coords.push([center.lng + dx, center.lat + dy]);
-  }
-  return coords;
-}
-
 interface MapProps {
   onNodeClick?: (node: Company) => void;
   onConnectionClick?: (connection: Connection & { fromNode?: Company; toNode?: Company }) => void;
@@ -89,13 +53,13 @@ interface MapProps {
 export function Map({ onNodeClick, onConnectionClick }: MapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
-  const deckOverlay = useRef<MapboxOverlay | null>(null);
+  const nodesRef = useRef<Company[]>([]);
+  const connectionsRef = useRef<Connection[]>([]);
 
   const [nodes, setNodes] = useState<Company[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [events, setEvents] = useState<GeoEvent[]>([]);
   const [hoveredNode, setHoveredNode] = useState<Company | null>(null);
-  const [animationTime, setAnimationTime] = useState(0);
 
   // Fetch companies from API
   useEffect(() => {
@@ -108,6 +72,10 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
       .catch(err => console.error('Failed to load companies:', err));
   }, []);
 
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
+
   // Fetch connections from API
   useEffect(() => {
     fetch(`${API_URL}/api/connections`)
@@ -118,6 +86,10 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
       })
       .catch(err => console.error('Failed to load connections:', err));
   }, []);
+
+  useEffect(() => {
+    connectionsRef.current = connections;
+  }, [connections]);
 
   // Fetch events from API
   useEffect(() => {
@@ -171,135 +143,121 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
     return node ? getCompanyPosition(node) : null;
   }, [nodes, getCompanyPosition]);
 
-  const getLayers = useCallback(() => {
-    const heatmapData: HeatmapEvent[] = events
+  const getNodeFeatures = useCallback(() => {
+    return nodes
+      .map((node) => {
+        const pos = getCompanyPosition(node);
+        if (!pos) return null;
+        return {
+          type: 'Feature' as const,
+          id: node.id,
+          geometry: { type: 'Point' as const, coordinates: pos },
+          properties: {
+            id: node.id,
+            name: node.name,
+            type: node.type,
+          },
+        };
+      })
+      .filter((feature): feature is GeoJSON.Feature<GeoJSON.Point> => feature !== null);
+  }, [nodes, getCompanyPosition]);
+
+  const getConnectionFeatures = useCallback(() => {
+    return connections
+      .map((connection) => {
+        const from = getNodePosition(connection.from_node_id);
+        const to = getNodePosition(connection.to_node_id);
+        if (!from || !to) return null;
+        return {
+          type: 'Feature' as const,
+          id: connection.id,
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: [from, to],
+          },
+          properties: {
+            id: connection.id,
+            status: connection.status,
+            is_user_connection: connection.is_user_connection,
+            from_node_id: connection.from_node_id,
+            to_node_id: connection.to_node_id,
+          },
+        };
+      })
+      .filter((feature): feature is GeoJSON.Feature<GeoJSON.LineString> => feature !== null);
+  }, [connections, getNodePosition]);
+
+  const getEventPointFeatures = useCallback(() => {
+    return events
       .map((event) => {
         const location = getEventPosition(event);
         if (!location) return null;
         return {
-          ...event,
-          contour: event.polygon
-            ? event.polygon.map((point) => [point.lng, point.lat] as [number, number])
-            : createCirclePolygon(location, Math.max(event.severity * 50, 100)),
+          type: 'Feature' as const,
+          id: event.id,
+          geometry: {
+            type: 'Point' as const,
+            coordinates: [location.lng, location.lat],
+          },
+          properties: {
+            id: event.id,
+            type: event.type,
+            severity: event.severity,
+            title: event.title,
+          },
         };
       })
-      .filter((event): event is HeatmapEvent => event !== null);
+      .filter((feature): feature is GeoJSON.Feature<GeoJSON.Point> => feature !== null);
+  }, [events, getEventPosition]);
 
-    return [
-      new ScatterplotLayer<Company>({
-        id: 'nodes',
-        data: nodes,
-        getPosition: (company) => getCompanyPosition(company) ?? [0, 0],
-        getRadius: (d) => (hoveredNode?.id === d.id ? 80000 : 50000),
-        radiusMinPixels: 6,
-        radiusMaxPixels: 25,
-        getFillColor: [0, 255, 255, 200],
-        stroked: true,
-        getLineColor: [0, 255, 255, 255],
-        lineWidthMinPixels: 2,
-        pickable: true,
-        onHover: (info) => setHoveredNode(info.object || null),
-        onClick: (info) => {
-          if (info.object && onNodeClick) {
-            onNodeClick(info.object);
-          }
+  const getEventPolygonFeatures = useCallback(() => {
+    return events
+      .filter((event) => event.polygon && event.polygon.length >= 3)
+      .map((event) => ({
+        type: 'Feature' as const,
+        id: `${event.id}-polygon`,
+        geometry: {
+          type: 'Polygon' as const,
+          coordinates: [[...event.polygon!, event.polygon![0]].map((point) => [point.lng, point.lat])],
         },
-        updateTriggers: {
-          getRadius: hoveredNode?.id,
+        properties: {
+          id: event.id,
+          type: event.type,
+          severity: event.severity,
+          title: event.title,
         },
-      }),
-      new ArcLayer<Connection>({
-        id: 'arcs',
-        data: connections.filter(c => {
-          const from = getNodePosition(c.from_node_id);
-          const to = getNodePosition(c.to_node_id);
-          return from && to;
-        }),
-        getSourcePosition: (d) => getNodePosition(d.from_node_id)!,
-        getTargetPosition: (d) => getNodePosition(d.to_node_id)!,
-        getSourceColor: (d) => {
-          if (d.is_user_connection) return [0, 255, 255, 255];
-          return CONNECTION_STATUS_COLORS[d.status] || [224, 224, 224, 200];
-        },
-        getTargetColor: (d) => {
-          if (d.is_user_connection) return [0, 255, 255, 255];
-          return CONNECTION_STATUS_COLORS[d.status] || [224, 224, 224, 200];
-        },
-        getWidth: (d) => d.is_user_connection ? 4 : 2,
-        widthMinPixels: 2,
-        getHeight: 0.5,
-        pickable: true,
-        onClick: (info) => {
-          if (info.object && onConnectionClick) {
-            const fromNode = nodes.find(n => n.id === info.object.from_node_id);
-            const toNode = nodes.find(n => n.id === info.object.to_node_id);
-            onConnectionClick({
-              ...info.object,
-              fromNode,
-              toNode,
-            });
-          }
-        },
-        updateTriggers: {
-          getSourceColor: [connections.map(c => c.is_user_connection), connections.map(c => c.status)],
-          getTargetColor: [connections.map(c => c.is_user_connection), connections.map(c => c.status)],
-          getWidth: connections.map(c => c.is_user_connection),
-        },
-      }),
-      new PolygonLayer<HeatmapEvent>({
-        id: 'heatmaps',
-        data: heatmapData,
-        getPolygon: (event) => event.contour,
-        getFillColor: (event) => {
-          const baseColor = EVENT_COLORS[event.type] || [128, 128, 128, 150];
-          const pulse = Math.sin(animationTime * 2) * 0.2 + 0.8;
-          return [baseColor[0], baseColor[1], baseColor[2], baseColor[3] * pulse];
-        },
-        getLineColor: [255, 255, 255, 80],
-        getLineWidth: 2,
-        lineWidthMinPixels: 1,
-        opacity: 0.6,
-        filled: true,
-        stroked: true,
-        pickable: true,
-        onClick: (info: { object?: HeatmapEvent | null }) => {
-          if (info.object) {
-            console.log('Event clicked:', info.object.title);
-          }
-        },
-        updateTriggers: {
-          getFillColor: animationTime,
-        },
-      }),
-    ];
-  }, [
-    nodes,
-    connections,
-    events,
-    hoveredNode,
-    animationTime,
-    onNodeClick,
-    onConnectionClick,
-    getNodePosition,
-    getCompanyPosition,
-    getEventPosition,
-  ]);
+      }));
+  }, [events]);
 
-  const getLayersRef = useRef(getLayers);
+  const buildFeatureCollection = useCallback(
+    <T extends GeoJSON.Geometry>(features: GeoJSON.Feature<T>[]) => ({
+      type: 'FeatureCollection' as const,
+      features,
+    }),
+    []
+  );
 
-  useEffect(() => {
-    getLayersRef.current = getLayers;
-  }, [getLayers]);
-
-  useEffect(() => {
-    let animationFrameId: number;
-    const animate = () => {
-      setAnimationTime((t) => t + 0.02);
-      animationFrameId = requestAnimationFrame(animate);
-    };
-    animationFrameId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationFrameId);
+  const labelLayerId = useCallback((mapInstance: mapboxgl.Map) => {
+    const layers = mapInstance.getStyle().layers;
+    if (!layers) return undefined;
+    const labelLayer = layers.find((layer) => layer.type === 'symbol' && layer.layout?.['text-field']);
+    return labelLayer?.id;
   }, []);
+
+  const updateSourceData = useCallback(
+    (mapInstance: mapboxgl.Map) => {
+      const nodesSource = mapInstance.getSource('nodes') as mapboxgl.GeoJSONSource | undefined;
+      const connectionsSource = mapInstance.getSource('connections') as mapboxgl.GeoJSONSource | undefined;
+      const eventsPointSource = mapInstance.getSource('events-points') as mapboxgl.GeoJSONSource | undefined;
+      const eventsPolygonSource = mapInstance.getSource('events-polygons') as mapboxgl.GeoJSONSource | undefined;
+
+      nodesSource?.setData(buildFeatureCollection(getNodeFeatures()));
+      connectionsSource?.setData(buildFeatureCollection(getConnectionFeatures()));
+      eventsPointSource?.setData(buildFeatureCollection(getEventPointFeatures()));
+      eventsPolygonSource?.setData(buildFeatureCollection(getEventPolygonFeatures()));
+    },
+    [buildFeatureCollection, getConnectionFeatures, getEventPointFeatures, getEventPolygonFeatures, getNodeFeatures]
+  );
 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
@@ -320,26 +278,312 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
         'space-color': 'rgb(13, 13, 13)',
         'star-intensity': 0.6,
       });
+      const mapInstance = map.current;
+      if (!mapInstance) return;
 
-      deckOverlay.current = new MapboxOverlay({
-        interleaved: false,
-        layers: getLayersRef.current(),
+      const beforeId = labelLayerId(mapInstance);
+
+      mapInstance.addSource('nodes', {
+        type: 'geojson',
+        data: buildFeatureCollection(getNodeFeatures()),
       });
-      map.current?.addControl(deckOverlay.current as unknown as mapboxgl.IControl);
+      mapInstance.addSource('connections', {
+        type: 'geojson',
+        data: buildFeatureCollection(getConnectionFeatures()),
+      });
+      mapInstance.addSource('events-points', {
+        type: 'geojson',
+        data: buildFeatureCollection(getEventPointFeatures()),
+      });
+      mapInstance.addSource('events-polygons', {
+        type: 'geojson',
+        data: buildFeatureCollection(getEventPolygonFeatures()),
+      });
+
+      mapInstance.addLayer(
+        {
+          id: 'events-heat',
+          type: 'heatmap',
+          source: 'events-points',
+          maxzoom: 8,
+          paint: {
+            'heatmap-weight': [
+              'interpolate',
+              ['linear'],
+              ['coalesce', ['get', 'severity'], 1],
+              0, 0,
+              10, 1,
+            ],
+            'heatmap-intensity': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              0, 0.6,
+              8, 2.5,
+            ],
+            'heatmap-color': [
+              'interpolate',
+              ['linear'],
+              ['heatmap-density'],
+              0, 'rgba(0, 255, 255, 0)',
+              0.3, 'rgba(0, 255, 255, 0.35)',
+              0.6, 'rgba(0, 255, 255, 0.6)',
+              1, 'rgba(0, 255, 255, 0.85)',
+            ],
+            'heatmap-radius': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              0, 4,
+              8, 40,
+            ],
+            'heatmap-opacity': 0.65,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
+          id: 'events-points',
+          type: 'circle',
+          source: 'events-points',
+          paint: {
+            'circle-radius': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              0, 2,
+              6, 4,
+              10, 8,
+            ],
+            'circle-color': [
+              'match',
+              ['get', 'type'],
+              'war', '#FF0000',
+              'natural_disaster', '#FF6600',
+              'weather', '#00AAFF',
+              'geopolitical', '#9900FF',
+              'tariff', '#FFCC00',
+              'infrastructure', '#CCCCCC',
+              '#E0E0E0',
+            ],
+            'circle-opacity': 0.9,
+            'circle-stroke-color': '#0D0D0D',
+            'circle-stroke-width': 0.5,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
+          id: 'events-polygons',
+          type: 'fill',
+          source: 'events-polygons',
+          paint: {
+            'fill-color': [
+              'match',
+              ['get', 'type'],
+              'war', 'rgba(255, 0, 0, 0.4)',
+              'natural_disaster', 'rgba(255, 102, 0, 0.4)',
+              'weather', 'rgba(0, 170, 255, 0.35)',
+              'geopolitical', 'rgba(153, 0, 255, 0.35)',
+              'tariff', 'rgba(255, 204, 0, 0.35)',
+              'infrastructure', 'rgba(204, 204, 204, 0.35)',
+              'rgba(128, 128, 128, 0.35)',
+            ],
+            'fill-opacity': 0.6,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
+          id: 'connections-glow',
+          type: 'line',
+          source: 'connections',
+          layout: {
+            'line-cap': 'round',
+            'line-join': 'round',
+          },
+          paint: {
+            'line-color': [
+              'case',
+              ['boolean', ['get', 'is_user_connection'], false],
+              'rgba(0, 255, 255, 0.7)',
+              [
+                'match',
+                ['get', 'status'],
+                'healthy', 'rgba(224, 224, 224, 0.6)',
+                'monitoring', 'rgba(255, 204, 0, 0.7)',
+                'at-risk', 'rgba(255, 102, 0, 0.7)',
+                'critical', 'rgba(255, 0, 0, 0.7)',
+                'disrupted', 'rgba(153, 0, 0, 0.7)',
+                'rgba(200, 200, 200, 0.6)',
+              ],
+            ],
+            'line-width': ['case', ['boolean', ['get', 'is_user_connection'], false], 6, 4],
+            'line-blur': 2.5,
+            'line-opacity': 0.7,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
+          id: 'connections',
+          type: 'line',
+          source: 'connections',
+          layout: {
+            'line-cap': 'round',
+            'line-join': 'round',
+          },
+          paint: {
+            'line-color': [
+              'case',
+              ['boolean', ['get', 'is_user_connection'], false],
+              'rgba(0, 255, 255, 1)',
+              [
+                'match',
+                ['get', 'status'],
+                'healthy', 'rgba(224, 224, 224, 0.9)',
+                'monitoring', 'rgba(255, 204, 0, 0.95)',
+                'at-risk', 'rgba(255, 102, 0, 0.95)',
+                'critical', 'rgba(255, 0, 0, 0.95)',
+                'disrupted', 'rgba(153, 0, 0, 0.95)',
+                'rgba(220, 220, 220, 0.9)',
+              ],
+            ],
+            'line-width': ['case', ['boolean', ['get', 'is_user_connection'], false], 2.5, 1.5],
+            'line-opacity': 0.9,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
+          id: 'nodes-glow',
+          type: 'circle',
+          source: 'nodes',
+          paint: {
+            'circle-radius': [
+              'case',
+              ['boolean', ['feature-state', 'hover'], false],
+              12,
+              8,
+            ],
+            'circle-color': 'rgba(0, 255, 255, 0.45)',
+            'circle-blur': 0.6,
+            'circle-opacity': 0.8,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
+          id: 'nodes',
+          type: 'circle',
+          source: 'nodes',
+          paint: {
+            'circle-radius': [
+              'case',
+              ['boolean', ['feature-state', 'hover'], false],
+              6,
+              4,
+            ],
+            'circle-color': 'rgba(0, 255, 255, 0.95)',
+            'circle-stroke-color': 'rgba(0, 255, 255, 1)',
+            'circle-stroke-width': 1,
+          },
+        },
+        beforeId
+      );
+
+      let hoveredNodeId: string | number | null = null;
+      mapInstance.on('mousemove', 'nodes', (event) => {
+        const feature = event.features?.[0];
+        if (!feature) return;
+
+        if (hoveredNodeId !== null) {
+          mapInstance.setFeatureState({ source: 'nodes', id: hoveredNodeId }, { hover: false });
+        }
+        hoveredNodeId = feature.id ?? null;
+        if (hoveredNodeId !== null) {
+          mapInstance.setFeatureState({ source: 'nodes', id: hoveredNodeId }, { hover: true });
+        }
+
+        const nodeId = feature.properties?.id as string | undefined;
+        if (nodeId) {
+          const node = nodesRef.current.find((n) => n.id === nodeId) || null;
+          setHoveredNode(node);
+        }
+        mapInstance.getCanvas().style.cursor = 'pointer';
+      });
+
+      mapInstance.on('mouseleave', 'nodes', () => {
+        if (hoveredNodeId !== null) {
+          mapInstance.setFeatureState({ source: 'nodes', id: hoveredNodeId }, { hover: false });
+        }
+        hoveredNodeId = null;
+        setHoveredNode(null);
+        mapInstance.getCanvas().style.cursor = '';
+      });
+
+      mapInstance.on('click', 'nodes', (event) => {
+        const feature = event.features?.[0];
+        const nodeId = feature?.properties?.id as string | undefined;
+        if (!nodeId) return;
+        const node = nodesRef.current.find((n) => n.id === nodeId);
+        if (node && onNodeClick) {
+          onNodeClick(node);
+        }
+      });
+
+      mapInstance.on('click', 'connections', (event) => {
+        const feature = event.features?.[0];
+        const connectionId = feature?.properties?.id as string | undefined;
+        if (!connectionId || !onConnectionClick) return;
+        const connection = connectionsRef.current.find((c) => c.id === connectionId);
+        if (!connection) return;
+        const fromNode = nodesRef.current.find((n) => n.id === connection.from_node_id);
+        const toNode = nodesRef.current.find((n) => n.id === connection.to_node_id);
+        onConnectionClick({ ...connection, fromNode, toNode });
+      });
+
+      mapInstance.on('click', 'events-polygons', (event) => {
+        const feature = event.features?.[0];
+        const title = feature?.properties?.title as string | undefined;
+        if (title) {
+          console.log('Event clicked:', title);
+        }
+      });
     });
 
     return () => {
       map.current?.remove();
       map.current = null;
-      deckOverlay.current = null;
     };
-  }, []);
+  }, [
+    buildFeatureCollection,
+    getConnectionFeatures,
+    getEventPointFeatures,
+    getEventPolygonFeatures,
+    getNodeFeatures,
+    labelLayerId,
+    onConnectionClick,
+    onNodeClick,
+  ]);
 
   useEffect(() => {
-    if (deckOverlay.current) {
-      deckOverlay.current.setProps({ layers: getLayers() });
+    if (map.current && map.current.isStyleLoaded()) {
+      updateSourceData(map.current);
     }
-  }, [getLayers]);
+  }, [nodes, connections, events, updateSourceData]);
 
   return (
     <div className="relative w-full h-full">
