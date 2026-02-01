@@ -13,6 +13,7 @@ import tariffsRouter from './routes/tariffs';
 import newsRouter from './routes/news';
 import userSupplyChainRouter from './routes/user-supply-chain';
 import alternativesRouter from './routes/alternatives';
+import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -72,6 +73,9 @@ app.get('/health', async (req, res) => {
     });
   }
 });
+
+// Error handling middleware (must be last)
+app.use(errorHandler);
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
