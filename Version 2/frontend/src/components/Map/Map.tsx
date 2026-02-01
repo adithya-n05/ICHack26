@@ -37,6 +37,19 @@ interface Connection {
   lead_time_days?: number;
 }
 
+interface PathEdge {
+  id: string;
+  fromNodeId?: string;
+  toNodeId?: string;
+  from_node_id?: string;
+  to_node_id?: string;
+  transportMode?: string;
+  transport_mode?: string;
+  status: string;
+  isUserConnection?: boolean;
+  is_user_connection?: boolean;
+}
+
 interface GeoEvent {
   id: string;
   type: string;
@@ -51,15 +64,22 @@ interface GeoEvent {
 interface MapProps {
   onNodeClick?: (node: Company) => void;
   onConnectionClick?: (connection: Connection & { fromNode?: Company; toNode?: Company }) => void;
+  pathEdges?: PathEdge[];
+  alternativeSuppliers?: Company[];
 }
 
-export function Map({ onNodeClick, onConnectionClick }: MapProps) {
+export function Map({
+  onNodeClick,
+  onConnectionClick,
+  pathEdges = [],
+  alternativeSuppliers = [],
+}: MapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const nodesRef = useRef<Company[]>([]);
   const connectionsRef = useRef<Connection[]>([]);
   const eventsRef = useRef<GeoEvent[]>([]);
-  
+
   // Pending events buffer for batching socket updates
   const pendingNewEvents = useRef<GeoEvent[]>([]);
   const pendingUpdatedEvents = useRef<Record<string, GeoEvent>>({});
@@ -80,7 +100,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
         setNodes(data);
       })
       .catch(err => console.error('Failed to load companies:', err));
-  }, []);
+  }, [updateEventSources]);
 
   useEffect(() => {
     nodesRef.current = nodes;
@@ -95,7 +115,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
         setConnections(data);
       })
       .catch(err => console.error('Failed to load connections:', err));
-  }, []);
+  }, [updateEventSources]);
 
   useEffect(() => {
     connectionsRef.current = connections;
@@ -119,22 +139,22 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
     // Flush pending batched updates to the map
     const flushEventUpdates = () => {
       if (!map.current?.isStyleLoaded()) return;
-      
+
       // Apply pending new events
       if (pendingNewEvents.current.length > 0) {
         eventsRef.current = [...pendingNewEvents.current, ...eventsRef.current];
         pendingNewEvents.current = [];
       }
-      
+
       // Apply pending updates
       const pendingKeys = Object.keys(pendingUpdatedEvents.current);
       if (pendingKeys.length > 0) {
-        eventsRef.current = eventsRef.current.map(e => 
+        eventsRef.current = eventsRef.current.map(e =>
           pendingUpdatedEvents.current[e.id] ?? e
         );
         pendingUpdatedEvents.current = {};
       }
-      
+
       // Update map sources (doesn't trigger React re-render)
       updateEventSources(map.current!);
     };
@@ -170,7 +190,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
         clearTimeout(updateTimerRef.current);
       }
     };
-  }, []);
+  }, [updateEventSources]);
 
   // Helper to get node position by ID
   const getCompanyPosition = useCallback((company: Company): [number, number] | null => {
@@ -217,6 +237,25 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
       .filter((feature): feature is GeoJSON.Feature<GeoJSON.Point> => feature !== null);
   }, [nodes, getCompanyPosition]);
 
+  const getAlternativeFeatures = useCallback(() => {
+    return alternativeSuppliers
+      .map((supplier) => {
+        const pos = getCompanyPosition(supplier);
+        if (!pos) return null;
+        return {
+          type: 'Feature' as const,
+          id: supplier.id,
+          geometry: { type: 'Point' as const, coordinates: pos },
+          properties: {
+            id: supplier.id,
+            name: supplier.name,
+            type: supplier.type,
+          },
+        };
+      })
+      .filter((feature): feature is GeoJSON.Feature<GeoJSON.Point> => feature !== null);
+  }, [alternativeSuppliers, getCompanyPosition]);
+
   const getConnectionFeatures = useCallback(() => {
     return connections
       .map((connection) => {
@@ -241,6 +280,35 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
       })
       .filter((feature): feature is GeoJSON.Feature<GeoJSON.LineString> => feature !== null);
   }, [connections, getNodePosition]);
+
+  const getPathFeatures = useCallback(() => {
+    return pathEdges
+      .map((edge) => {
+        const fromId = edge.fromNodeId ?? edge.from_node_id;
+        const toId = edge.toNodeId ?? edge.to_node_id;
+        if (!fromId || !toId) return null;
+        const from = getNodePosition(fromId);
+        const to = getNodePosition(toId);
+        if (!from || !to) return null;
+        return {
+          type: 'Feature' as const,
+          id: edge.id,
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: [from, to],
+          },
+          properties: {
+            id: edge.id,
+            status: edge.status,
+            from_node_id: fromId,
+            to_node_id: toId,
+            transport_mode: edge.transportMode ?? edge.transport_mode,
+            is_user_connection: edge.isUserConnection ?? edge.is_user_connection ?? false,
+          },
+        };
+      })
+      .filter((feature): feature is GeoJSON.Feature<GeoJSON.LineString> => feature !== null);
+  }, [getNodePosition, pathEdges]);
 
   const getEventPointFeatures = useCallback((eventsData: GeoEvent[] = eventsRef.current) => {
     return eventsData
@@ -363,12 +431,23 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
     (mapInstance: mapboxgl.Map) => {
       const nodesSource = mapInstance.getSource('nodes') as mapboxgl.GeoJSONSource | undefined;
       const connectionsSource = mapInstance.getSource('connections') as mapboxgl.GeoJSONSource | undefined;
+      const pathEdgesSource = mapInstance.getSource('path-edges') as mapboxgl.GeoJSONSource | undefined;
+      const alternativesSource = mapInstance.getSource('alternatives') as mapboxgl.GeoJSONSource | undefined;
 
       nodesSource?.setData(buildFeatureCollection(getNodeFeatures()));
       connectionsSource?.setData(buildFeatureCollection(getConnectionFeatures()));
+      pathEdgesSource?.setData(buildFeatureCollection(getPathFeatures()));
+      alternativesSource?.setData(buildFeatureCollection(getAlternativeFeatures()));
       updateEventSources(mapInstance);
     },
-    [buildFeatureCollection, getConnectionFeatures, getNodeFeatures, updateEventSources]
+    [
+      buildFeatureCollection,
+      getAlternativeFeatures,
+      getConnectionFeatures,
+      getNodeFeatures,
+      getPathFeatures,
+      updateEventSources,
+    ]
   );
 
   useEffect(() => {
@@ -462,6 +541,14 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
       mapInstance.addSource('connections', {
         type: 'geojson',
         data: buildFeatureCollection(getConnectionFeatures()),
+      });
+      mapInstance.addSource('path-edges', {
+        type: 'geojson',
+        data: buildFeatureCollection(getPathFeatures()),
+      });
+      mapInstance.addSource('alternatives', {
+        type: 'geojson',
+        data: buildFeatureCollection(getAlternativeFeatures()),
       });
       mapInstance.addSource('events-points', {
         type: 'geojson',
@@ -678,6 +765,61 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
 
       mapInstance.addLayer(
         {
+          id: 'paths-glow',
+          type: 'line',
+          source: 'path-edges',
+          layout: {
+            'line-cap': 'round',
+            'line-join': 'round',
+          },
+          paint: {
+            'line-color': [
+              'match',
+              ['get', 'status'],
+              'healthy', 'rgba(224, 224, 224, 0.8)',
+              'monitoring', 'rgba(255, 204, 0, 0.85)',
+              'at-risk', 'rgba(255, 102, 0, 0.85)',
+              'critical', 'rgba(255, 0, 0, 0.9)',
+              'disrupted', 'rgba(153, 0, 0, 0.9)',
+              'rgba(224, 224, 224, 0.8)',
+            ],
+            'line-width': 6,
+            'line-blur': 3.5,
+            'line-opacity': 0.85,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
+          id: 'paths',
+          type: 'line',
+          source: 'path-edges',
+          layout: {
+            'line-cap': 'round',
+            'line-join': 'round',
+          },
+          paint: {
+            'line-color': [
+              'match',
+              ['get', 'status'],
+              'healthy', 'rgba(224, 224, 224, 1)',
+              'monitoring', 'rgba(255, 204, 0, 1)',
+              'at-risk', 'rgba(255, 102, 0, 1)',
+              'critical', 'rgba(255, 0, 0, 1)',
+              'disrupted', 'rgba(153, 0, 0, 1)',
+              'rgba(224, 224, 224, 1)',
+            ],
+            'line-width': 2.8,
+            'line-opacity': 0.95,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
           id: 'nodes-glow',
           type: 'circle',
           source: 'nodes',
@@ -710,6 +852,36 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
             ],
             'circle-color': 'rgba(0, 255, 255, 0.95)',
             'circle-stroke-color': 'rgba(0, 255, 255, 1)',
+            'circle-stroke-width': 1,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
+          id: 'alternatives-glow',
+          type: 'circle',
+          source: 'alternatives',
+          paint: {
+            'circle-radius': 10,
+            'circle-color': 'rgba(0, 255, 0, 0.45)',
+            'circle-blur': 0.7,
+            'circle-opacity': 0.9,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
+          id: 'alternatives',
+          type: 'circle',
+          source: 'alternatives',
+          paint: {
+            'circle-radius': 5,
+            'circle-color': 'rgba(0, 255, 0, 0.95)',
+            'circle-stroke-color': 'rgba(0, 255, 0, 1)',
             'circle-stroke-width': 1,
           },
         },
@@ -782,10 +954,13 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
     };
   }, [
     buildFeatureCollection,
+    enhanceMapDetail,
+    getAlternativeFeatures,
     getConnectionFeatures,
     getEventPointFeatures,
     getEventPolygonFeatures,
     getNodeFeatures,
+    getPathFeatures,
     labelLayerId,
     onConnectionClick,
     onNodeClick,
@@ -796,7 +971,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
     if (map.current && map.current.isStyleLoaded()) {
       updateSourceData(map.current);
     }
-  }, [nodes, connections, updateSourceData]);
+  }, [nodes, connections, pathEdges, alternativeSuppliers, updateSourceData]);
 
   // Initial event load - only runs once when eventsLoaded becomes true
   useEffect(() => {
