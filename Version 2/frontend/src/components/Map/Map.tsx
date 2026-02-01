@@ -6,62 +6,47 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
-const SAMPLE_NODES = [
-  { position: [120.9969, 24.7866] as [number, number], name: 'TSMC Hsinchu', type: 'foundry' },
-  { position: [127.1836, 37.2326] as [number, number], name: 'Samsung Hwaseong', type: 'idm' },
-  { position: [121.4737, 31.2304] as [number, number], name: 'SMIC Shanghai', type: 'foundry' },
-  { position: [-111.8413, 33.3062] as [number, number], name: 'Intel Chandler', type: 'idm' },
-  { position: [5.4645, 51.4101] as [number, number], name: 'ASML Veldhoven', type: 'equipment' },
-];
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-type NodeData = (typeof SAMPLE_NODES)[0];
+interface Company {
+  id: string;
+  name: string;
+  type: string;
+  location?: { lat: number; lng: number };
+  lat?: number | null;
+  lng?: number | null;
+  city: string;
+  country: string;
+  description?: string;
+  products?: string[];
+  annual_revenue_usd?: number;
+  employees?: number;
+}
 
-const SAMPLE_CONNECTIONS = [
-  {
-    source: [120.9969, 24.7866] as [number, number], // TSMC
-    target: [127.1836, 37.2326] as [number, number], // Samsung
-    status: 'healthy',
-  },
-  {
-    source: [120.9969, 24.7866] as [number, number], // TSMC
-    target: [-111.8413, 33.3062] as [number, number], // Intel
-    status: 'healthy',
-  },
-  {
-    source: [5.4645, 51.4101] as [number, number], // ASML
-    target: [120.9969, 24.7866] as [number, number], // TSMC
-    status: 'healthy',
-  },
-];
+interface Connection {
+  id: string;
+  from_node_id: string;
+  to_node_id: string;
+  transport_mode: string;
+  status: string;
+  is_user_connection: boolean;
+  materials?: string[];
+  description?: string;
+  lead_time_days?: number;
+}
 
-type ConnectionData = (typeof SAMPLE_CONNECTIONS)[0];
+interface GeoEvent {
+  id: string;
+  type: string;
+  title: string;
+  location?: { lat: number; lng: number };
+  lat?: number | null;
+  lng?: number | null;
+  severity: number;
+  polygon?: Array<{ lat: number; lng: number }>;
+}
 
-const SAMPLE_EVENTS = [
-  {
-    contour: [
-      [119, 23],
-      [122, 23],
-      [122, 26],
-      [119, 26],
-      [119, 23],
-    ] as [number, number][],
-    type: 'war',
-    name: 'Taiwan Strait Tensions',
-  },
-  {
-    contour: [
-      [139, 35],
-      [142, 35],
-      [142, 38],
-      [139, 38],
-      [139, 35],
-    ] as [number, number][],
-    type: 'natural_disaster',
-    name: 'Japan Earthquake Zone',
-  },
-];
-
-type EventData = (typeof SAMPLE_EVENTS)[0];
+type HeatmapEvent = GeoEvent & { contour: Array<[number, number]> };
 
 const EVENT_COLORS: Record<string, [number, number, number, number]> = {
   war: [255, 0, 0, 150],
@@ -72,20 +57,124 @@ const EVENT_COLORS: Record<string, [number, number, number, number]> = {
   infrastructure: [204, 204, 204, 150],
 };
 
-export function Map() {
+const CONNECTION_STATUS_COLORS: Record<string, [number, number, number, number]> = {
+  healthy: [224, 224, 224, 200],
+  monitoring: [255, 204, 0, 200],
+  'at-risk': [255, 102, 0, 200],
+  critical: [255, 0, 0, 200],
+  disrupted: [139, 0, 0, 200],
+};
+
+function createCirclePolygon(
+  center: { lat: number; lng: number },
+  radiusKm: number,
+  points: number = 32
+): Array<[number, number]> {
+  const coords: Array<[number, number]> = [];
+  for (let i = 0; i <= points; i++) {
+    const angle = (i / points) * 2 * Math.PI;
+    const dx = radiusKm * Math.cos(angle) / 111;
+    const dy = radiusKm * Math.sin(angle) / 111;
+    coords.push([center.lng + dx, center.lat + dy]);
+  }
+  return coords;
+}
+
+interface MapProps {
+  onNodeClick?: (node: Company) => void;
+  onConnectionClick?: (connection: Connection & { fromNode?: Company; toNode?: Company }) => void;
+}
+
+export function Map({ onNodeClick, onConnectionClick }: MapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const deckOverlay = useRef<MapboxOverlay | null>(null);
-  const [hoveredNode, setHoveredNode] = useState<NodeData | null>(null);
+
+  const [nodes, setNodes] = useState<Company[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [events, setEvents] = useState<GeoEvent[]>([]);
+  const [hoveredNode, setHoveredNode] = useState<Company | null>(null);
   const [animationTime, setAnimationTime] = useState(0);
 
+  // Fetch companies from API
+  useEffect(() => {
+    fetch(`${API_URL}/api/companies`)
+      .then(res => res.json())
+      .then(data => {
+        console.log('Loaded companies:', data.length);
+        setNodes(data);
+      })
+      .catch(err => console.error('Failed to load companies:', err));
+  }, []);
+
+  // Fetch connections from API
+  useEffect(() => {
+    fetch(`${API_URL}/api/connections`)
+      .then(res => res.json())
+      .then(data => {
+        console.log('Loaded connections:', data.length);
+        setConnections(data);
+      })
+      .catch(err => console.error('Failed to load connections:', err));
+  }, []);
+
+  // Fetch events from API
+  useEffect(() => {
+    fetch(`${API_URL}/api/events`)
+      .then(res => res.json())
+      .then(data => {
+        console.log('Loaded events:', data.length);
+        setEvents(data);
+      })
+      .catch(err => console.error('Failed to load events:', err));
+  }, []);
+
+  // Helper to get node position by ID
+  const getCompanyPosition = useCallback((company: Company): [number, number] | null => {
+    if (company.location) {
+      return [company.location.lng, company.location.lat];
+    }
+    if (typeof company.lat === 'number' && typeof company.lng === 'number') {
+      return [company.lng, company.lat];
+    }
+    return null;
+  }, []);
+
+  const getEventPosition = useCallback((event: GeoEvent): { lat: number; lng: number } | null => {
+    if (event.location) {
+      return event.location;
+    }
+    if (typeof event.lat === 'number' && typeof event.lng === 'number') {
+      return { lat: event.lat, lng: event.lng };
+    }
+    return null;
+  }, []);
+
+  const getNodePosition = useCallback((nodeId: string): [number, number] | null => {
+    const node = nodes.find(n => n.id === nodeId);
+    return node ? getCompanyPosition(node) : null;
+  }, [nodes, getCompanyPosition]);
+
   const getLayers = useCallback(() => {
+    const heatmapData: HeatmapEvent[] = events
+      .map((event) => {
+        const location = getEventPosition(event);
+        if (!location) return null;
+        return {
+          ...event,
+          contour: event.polygon
+            ? event.polygon.map((point) => [point.lng, point.lat] as [number, number])
+            : createCirclePolygon(location, Math.max(event.severity * 50, 100)),
+        };
+      })
+      .filter((event): event is HeatmapEvent => event !== null);
+
     return [
-      new ScatterplotLayer<NodeData>({
+      new ScatterplotLayer<Company>({
         id: 'nodes',
-        data: SAMPLE_NODES,
-        getPosition: (d) => d.position,
-        getRadius: (d) => (hoveredNode?.name === d.name ? 80000 : 50000),
+        data: nodes,
+        getPosition: (company) => getCompanyPosition(company) ?? [0, 0],
+        getRadius: (d) => (hoveredNode?.id === d.id ? 80000 : 50000),
         radiusMinPixels: 6,
         radiusMaxPixels: 25,
         getFillColor: [0, 255, 255, 200],
@@ -95,31 +184,58 @@ export function Map() {
         pickable: true,
         onHover: (info) => setHoveredNode(info.object || null),
         onClick: (info) => {
-          if (info.object) {
-            console.log('Clicked node:', info.object);
+          if (info.object && onNodeClick) {
+            onNodeClick(info.object);
           }
         },
         updateTriggers: {
-          getRadius: hoveredNode?.name,
+          getRadius: hoveredNode?.id,
         },
       }),
-      new ArcLayer<ConnectionData>({
+      new ArcLayer<Connection>({
         id: 'arcs',
-        data: SAMPLE_CONNECTIONS,
-        getSourcePosition: (d) => d.source,
-        getTargetPosition: (d) => d.target,
-        getSourceColor: [224, 224, 224, 200],
-        getTargetColor: [224, 224, 224, 200],
-        getWidth: 2,
+        data: connections.filter(c => {
+          const from = getNodePosition(c.from_node_id);
+          const to = getNodePosition(c.to_node_id);
+          return from && to;
+        }),
+        getSourcePosition: (d) => getNodePosition(d.from_node_id)!,
+        getTargetPosition: (d) => getNodePosition(d.to_node_id)!,
+        getSourceColor: (d) => {
+          if (d.is_user_connection) return [0, 255, 255, 255];
+          return CONNECTION_STATUS_COLORS[d.status] || [224, 224, 224, 200];
+        },
+        getTargetColor: (d) => {
+          if (d.is_user_connection) return [0, 255, 255, 255];
+          return CONNECTION_STATUS_COLORS[d.status] || [224, 224, 224, 200];
+        },
+        getWidth: (d) => d.is_user_connection ? 4 : 2,
         widthMinPixels: 2,
         getHeight: 0.5,
+        pickable: true,
+        onClick: (info) => {
+          if (info.object && onConnectionClick) {
+            const fromNode = nodes.find(n => n.id === info.object.from_node_id);
+            const toNode = nodes.find(n => n.id === info.object.to_node_id);
+            onConnectionClick({
+              ...info.object,
+              fromNode,
+              toNode,
+            });
+          }
+        },
+        updateTriggers: {
+          getSourceColor: [connections.map(c => c.is_user_connection), connections.map(c => c.status)],
+          getTargetColor: [connections.map(c => c.is_user_connection), connections.map(c => c.status)],
+          getWidth: connections.map(c => c.is_user_connection),
+        },
       }),
-      new PolygonLayer<EventData>({
+      new PolygonLayer<HeatmapEvent>({
         id: 'heatmaps',
-        data: SAMPLE_EVENTS,
-        getPolygon: (d) => d.contour,
-        getFillColor: (d) => {
-          const baseColor = EVENT_COLORS[d.type] || [128, 128, 128, 150];
+        data: heatmapData,
+        getPolygon: (event) => event.contour,
+        getFillColor: (event) => {
+          const baseColor = EVENT_COLORS[event.type] || [128, 128, 128, 150];
           const pulse = Math.sin(animationTime * 2) * 0.2 + 0.8;
           return [baseColor[0], baseColor[1], baseColor[2], baseColor[3] * pulse];
         },
@@ -129,12 +245,35 @@ export function Map() {
         opacity: 0.6,
         filled: true,
         stroked: true,
+        pickable: true,
+        onClick: (info: { object?: HeatmapEvent | null }) => {
+          if (info.object) {
+            console.log('Event clicked:', info.object.title);
+          }
+        },
         updateTriggers: {
           getFillColor: animationTime,
         },
       }),
     ];
-  }, [hoveredNode, animationTime]);
+  }, [
+    nodes,
+    connections,
+    events,
+    hoveredNode,
+    animationTime,
+    onNodeClick,
+    onConnectionClick,
+    getNodePosition,
+    getCompanyPosition,
+    getEventPosition,
+  ]);
+
+  const getLayersRef = useRef(getLayers);
+
+  useEffect(() => {
+    getLayersRef.current = getLayers;
+  }, [getLayers]);
 
   useEffect(() => {
     let animationFrameId: number;
@@ -157,13 +296,26 @@ export function Map() {
       zoom: 2,
     });
 
-    map.current.on('style.load', () => {
-      deckOverlay.current = new MapboxOverlay({ layers: getLayers() });
+    map.current.once('load', () => {
+      map.current?.setFog({
+        color: 'rgb(13, 13, 13)',
+        'high-color': 'rgb(26, 26, 26)',
+        'horizon-blend': 0.02,
+        'space-color': 'rgb(13, 13, 13)',
+        'star-intensity': 0.6,
+      });
+
+      deckOverlay.current = new MapboxOverlay({
+        interleaved: false,
+        layers: getLayersRef.current(),
+      });
       map.current?.addControl(deckOverlay.current as unknown as mapboxgl.IControl);
     });
 
     return () => {
       map.current?.remove();
+      map.current = null;
+      deckOverlay.current = null;
     };
   }, []);
 
@@ -173,5 +325,14 @@ export function Map() {
     }
   }, [getLayers]);
 
-  return <div ref={mapContainer} className="h-screen w-screen" />;
+  return (
+    <div className="relative w-full h-full">
+      <div ref={mapContainer} className="w-full h-full" />
+      {hoveredNode && (
+        <div className="absolute top-4 left-4 bg-bg-secondary px-3 py-2 rounded border border-border-color">
+          <span className="text-accent-cyan font-mono text-sm">{hoveredNode.name}</span>
+        </div>
+      )}
+    </div>
+  );
 }

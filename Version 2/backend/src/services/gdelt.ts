@@ -32,19 +32,41 @@ function calculateSeverity(tone: number): number {
   return severity;
 }
 
+const MIN_REQUEST_INTERVAL_MS = 5000;
+let lastFetchAt = 0;
+
 export async function fetchGdeltEvents(): Promise<GdeltEvent[]> {
   try {
-    const query = encodeURIComponent('semiconductor OR chip OR supply chain OR TSMC OR Samsung');
+    const now = Date.now();
+    if (now - lastFetchAt < MIN_REQUEST_INTERVAL_MS) {
+      return [];
+    }
+    lastFetchAt = now;
+
+    const query = encodeURIComponent('(semiconductor OR chip OR "supply chain" OR TSMC OR Samsung)');
     const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${query}&mode=artlist&maxrecords=50&format=json`;
 
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
 
     if (!response.ok) {
-      console.error('GDELT API error:', response.status);
+      const errorBody = await response.text().catch(() => '');
+      console.error('GDELT API error:', response.status, errorBody.slice(0, 200));
       return [];
     }
 
-    const data = await response.json() as { articles?: any[] };
+    const bodyText = await response.text();
+    let data: { articles?: any[] };
+    try {
+      data = JSON.parse(bodyText) as { articles?: any[] };
+    } catch (err) {
+      console.error('GDELT response was not JSON:', bodyText.slice(0, 200));
+      return [];
+    }
+
     const articles = data.articles || [];
 
     return articles.map((article: any) => ({

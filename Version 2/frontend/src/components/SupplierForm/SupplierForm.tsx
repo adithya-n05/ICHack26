@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
 const MATERIAL_OPTIONS = [
   'Silicon Wafers',
   'DRAM Chips',
@@ -27,10 +29,13 @@ interface SupplierFormData {
 
 interface SupplierFormProps {
   onSubmit?: (data: SupplierFormData) => void;
+  onSubmitSuccess?: () => void;
+  onClose?: () => void;
 }
 
-export function SupplierForm({ onSubmit }: SupplierFormProps) {
+export function SupplierForm({ onSubmit, onSubmitSuccess, onClose }: SupplierFormProps) {
   const [step, setStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [companyName, setCompanyName] = useState('');
   const [location, setLocation] = useState({ city: '', country: '' });
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -47,11 +52,51 @@ export function SupplierForm({ onSubmit }: SupplierFormProps) {
     }
   };
 
-  const handleSubmit = () => {
-    onSubmit?.({
+  const handleSubmit = async () => {
+    const formData: SupplierFormData = {
       company: { name: companyName, location },
       suppliers,
-    });
+    };
+
+    // Call onSubmit prop if provided
+    onSubmit?.(formData);
+
+    // POST to API
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${API_URL}/api/user-supply-chain`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company: {
+            name: companyName,
+            city: location.city,
+            country: location.country,
+          },
+          suppliers: suppliers.map(s => {
+            const [city, country] = s.location.split(',').map(p => p.trim());
+            return {
+              name: s.name,
+              city: city || s.location,
+              country: country || '',
+              materials: s.materials,
+            };
+          }),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save supply chain');
+      }
+
+      console.log('Supply chain saved successfully');
+      onSubmitSuccess?.();
+    } catch (error) {
+      console.error('Error saving supply chain:', error);
+      alert('Failed to save. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const canAdvance = () => {
@@ -69,7 +114,21 @@ export function SupplierForm({ onSubmit }: SupplierFormProps) {
   };
 
   return (
-    <form className="bg-bg-secondary p-6 rounded border border-border max-w-lg">
+    <form className="bg-bg-secondary p-6 rounded border border-border-color max-w-lg">
+      {/* Header with close button */}
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-text-primary font-mono text-lg">Add Your Supply Chain</h2>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-text-secondary hover:text-text-primary text-xl"
+          >
+            ×
+          </button>
+        )}
+      </div>
+
       {/* Step indicators */}
       <div className="flex gap-2 mb-6">
         {[1, 2, 3].map((s) => (
@@ -96,7 +155,7 @@ export function SupplierForm({ onSubmit }: SupplierFormProps) {
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
               placeholder="Your company name"
-              className="w-full bg-bg-tertiary border border-border rounded p-2 text-text-primary focus:border-accent-cyan focus:outline-none"
+              className="w-full bg-bg-tertiary border border-border-color rounded p-2 text-text-primary focus:border-accent-cyan focus:outline-none"
             />
           </div>
           <div className="mb-4 grid grid-cols-2 gap-4">
@@ -111,7 +170,7 @@ export function SupplierForm({ onSubmit }: SupplierFormProps) {
                   setLocation({ ...location, city: e.target.value })
                 }
                 placeholder="City"
-                className="w-full bg-bg-tertiary border border-border rounded p-2 text-text-primary focus:border-accent-cyan focus:outline-none"
+                className="w-full bg-bg-tertiary border border-border-color rounded p-2 text-text-primary focus:border-accent-cyan focus:outline-none"
               />
             </div>
             <div>
@@ -125,7 +184,7 @@ export function SupplierForm({ onSubmit }: SupplierFormProps) {
                   setLocation({ ...location, country: e.target.value })
                 }
                 placeholder="Country"
-                className="w-full bg-bg-tertiary border border-border rounded p-2 text-text-primary focus:border-accent-cyan focus:outline-none"
+                className="w-full bg-bg-tertiary border border-border-color rounded p-2 text-text-primary focus:border-accent-cyan focus:outline-none"
               />
             </div>
           </div>
@@ -159,7 +218,7 @@ export function SupplierForm({ onSubmit }: SupplierFormProps) {
                 setCurrentSupplier({ ...currentSupplier, name: e.target.value })
               }
               placeholder="Supplier company name"
-              className="w-full bg-bg-tertiary border border-border rounded p-2 text-text-primary focus:border-accent-cyan focus:outline-none"
+              className="w-full bg-bg-tertiary border border-border-color rounded p-2 text-text-primary focus:border-accent-cyan focus:outline-none"
             />
           </div>
           <div className="mb-4">
@@ -176,7 +235,7 @@ export function SupplierForm({ onSubmit }: SupplierFormProps) {
                 })
               }
               placeholder="City, Country"
-              className="w-full bg-bg-tertiary border border-border rounded p-2 text-text-primary focus:border-accent-cyan focus:outline-none"
+              className="w-full bg-bg-tertiary border border-border-color rounded p-2 text-text-primary focus:border-accent-cyan focus:outline-none"
             />
           </div>
           <div className="mb-4">
@@ -271,10 +330,10 @@ export function SupplierForm({ onSubmit }: SupplierFormProps) {
               setStep((s) => Math.min(3, s + 1));
             }
           }}
-          disabled={!canAdvance() && step !== 3}
+          disabled={(!canAdvance() && step !== 3) || isSubmitting}
           className="px-4 py-2 bg-accent-cyan text-bg-primary rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {step === 3 ? 'Submit' : 'Next'}
+          {isSubmitting ? 'Saving...' : step === 3 ? 'Submit' : 'Next'}
         </button>
       </div>
     </form>
