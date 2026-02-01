@@ -472,13 +472,16 @@ export function Map({
     return parsed >= cutoff.getTime();
   }, []);
 
-  const getNodePosition = useCallback((nodeId: string): [number, number] | null => {
-    const node = nodes.find(n => n.id === nodeId);
-    return node ? getCompanyPosition(node) : null;
-  }, [nodes, getCompanyPosition]);
+  const getNodePosition = useCallback(
+    (nodeId: string): [number, number] | null => {
+      const node = nodesRef.current.find((n) => n.id === nodeId);
+      return node ? getCompanyPosition(node) : null;
+    },
+    [getCompanyPosition],
+  );
 
   const getNodeFeatures = useCallback(() => {
-    return nodes
+    return nodesRef.current
       .map((node) => {
         const pos = getCompanyPosition(node);
         if (!pos) return null;
@@ -494,10 +497,10 @@ export function Map({
         };
       })
       .filter((feature): feature is GeoJSON.Feature<GeoJSON.Point> => feature !== null);
-  }, [nodes, getCompanyPosition]);
+  }, [getCompanyPosition]);
 
   const getConnectionFeatures = useCallback(() => {
-    return mergedConnections
+    return connectionsRef.current
       .map((connection) => {
         const from = getNodePosition(connection.from_node_id);
         const to = getNodePosition(connection.to_node_id);
@@ -519,7 +522,7 @@ export function Map({
         };
       })
       .filter((feature): feature is GeoJSON.Feature<GeoJSON.LineString> => feature !== null);
-  }, [getNodePosition, mergedConnections]);
+  }, [getNodePosition]);
 
   const getPathFeatures = useCallback(() => {
     return pathEdgesRef.current
