@@ -46,6 +46,7 @@ interface GeoEvent {
   lng?: number | null;
   severity: number;
   polygon?: Array<{ lat: number; lng: number }>;
+  source?: string;
 }
 
 interface MapProps {
@@ -70,6 +71,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
   // events state only used for initial load - map updates happen via refs
   const [eventsLoaded, setEventsLoaded] = useState(false);
   const [hoveredNode, setHoveredNode] = useState<Company | null>(null);
+  const isNonNull = <T,>(value: T | null): value is T => value !== null;
 
   // Fetch companies from API
   useEffect(() => {
@@ -203,7 +205,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
       .map((node) => {
         const pos = getCompanyPosition(node);
         if (!pos) return null;
-        return {
+        const feature: GeoJSON.Feature<GeoJSON.Point> = {
           type: 'Feature' as const,
           id: node.id,
           geometry: { type: 'Point' as const, coordinates: pos },
@@ -213,8 +215,9 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
             type: node.type,
           },
         };
+        return feature;
       })
-      .filter((feature): feature is GeoJSON.Feature<GeoJSON.Point> => feature !== null);
+      .filter(isNonNull);
   }, [nodes, getCompanyPosition]);
 
   const getConnectionFeatures = useCallback(() => {
@@ -223,7 +226,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
         const from = getNodePosition(connection.from_node_id);
         const to = getNodePosition(connection.to_node_id);
         if (!from || !to) return null;
-        return {
+        const feature: GeoJSON.Feature<GeoJSON.LineString> = {
           type: 'Feature' as const,
           id: connection.id,
           geometry: {
@@ -238,8 +241,9 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
             to_node_id: connection.to_node_id,
           },
         };
+        return feature;
       })
-      .filter((feature): feature is GeoJSON.Feature<GeoJSON.LineString> => feature !== null);
+      .filter(isNonNull);
   }, [connections, getNodePosition]);
 
   const getEventPointFeatures = useCallback((eventsData: GeoEvent[] = eventsRef.current) => {
@@ -247,7 +251,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
       .map((event) => {
         const location = getEventPosition(event);
         if (!location) return null;
-        return {
+        const feature: GeoJSON.Feature<GeoJSON.Point> = {
           type: 'Feature' as const,
           id: event.id,
           geometry: {
@@ -262,8 +266,9 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
             source: event.source,
           },
         };
+        return feature;
       })
-      .filter((feature): feature is GeoJSON.Feature<GeoJSON.Point> => feature !== null);
+      .filter(isNonNull);
   }, [getEventPosition]);
 
   const getEventPolygonFeatures = useCallback((eventsData: GeoEvent[] = eventsRef.current) => {

@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Map } from './components/Map';
 import { DetailPanel } from './components/DetailPanel';
 import { NewsTicker } from './components/NewsTicker';
 import { SupplierForm } from './components/SupplierForm';
 import { socket } from './lib/socket';
+import { getRiskAssessments } from './lib/riskApi';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -60,6 +61,10 @@ function App() {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [mapRefreshKey, setMapRefreshKey] = useState(0);
+  const [riskReason, setRiskReason] = useState<string | null>(null);
+  const [riskCategory, setRiskCategory] = useState<string | null>(null);
+  const [riskLoading, setRiskLoading] = useState(false);
+  const riskRequestId = useRef(0);
 
   // Fetch initial news
   useEffect(() => {
@@ -107,6 +112,57 @@ function App() {
     return null;
   };
 
+  const loadRiskContext = async (entityType: 'node' | 'connection', entityId: string) => {
+    const requestId = ++riskRequestId.current;
+    setRiskLoading(true);
+    setRiskReason(null);
+    setRiskCategory(null);
+
+    try {
+      const assessments = await getRiskAssessments({ limit: 50 });
+      if (requestId !== riskRequestId.current) return;
+
+      const match = assessments.find((assessment: any) => {
+        const affected =
+          assessment.affectedEntities ??
+          assessment.affected_entities ??
+          [];
+
+        return affected.some((entity: any) => {
+          const type = entity.type ?? entity.entity_type;
+          return type === entityType && entity.id === entityId;
+        });
+      });
+
+      if (!match) {
+        setRiskReason(null);
+        setRiskCategory(null);
+        return;
+      }
+
+      const reasoning = (match as any).reasoning ?? '';
+      const summary =
+        typeof reasoning === 'string'
+          ? reasoning
+          : reasoning.summary ??
+            reasoning.reason ??
+            (Array.isArray(reasoning.factors) ? reasoning.factors.join(', ') : '');
+      const category = (match as any).riskCategory ?? (match as any).risk_category ?? null;
+
+      setRiskReason(summary || null);
+      setRiskCategory(category || null);
+    } catch (err) {
+      if (requestId !== riskRequestId.current) return;
+      console.error('Failed to load risk context:', err);
+      setRiskReason(null);
+      setRiskCategory(null);
+    } finally {
+      if (requestId === riskRequestId.current) {
+        setRiskLoading(false);
+      }
+    }
+  };
+
   const handleNodeClick = (node: MapCompany) => {
     const normalizedNode = normalizeCompany(node);
     if (!normalizedNode) {
@@ -116,6 +172,7 @@ function App() {
     console.log('Node clicked:', node.name);
     setSelectedConnection(null);
     setSelectedNode(normalizedNode);
+    loadRiskContext('node', normalizedNode.id);
   };
 
   const handleConnectionClick = (connection: MapConnection) => {
@@ -128,11 +185,16 @@ function App() {
       fromNode,
       toNode,
     });
+    loadRiskContext('connection', connection.id);
   };
 
   const handleClosePanel = () => {
     setSelectedNode(null);
     setSelectedConnection(null);
+    riskRequestId.current += 1;
+    setRiskReason(null);
+    setRiskCategory(null);
+    setRiskLoading(false);
   };
 
   const handleSupplierFormSuccess = () => {
@@ -164,6 +226,9 @@ function App() {
         <DetailPanel
           selectedNode={selectedNode}
           selectedConnection={selectedConnection}
+          riskReason={riskReason}
+          riskCategory={riskCategory}
+          riskLoading={riskLoading}
           onClose={handleClosePanel}
         />
       </div>

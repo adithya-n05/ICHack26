@@ -1,4 +1,4 @@
-import { ProductCategory } from './taxonomy';
+import type { ProductCategory } from './taxonomy';
 
 export interface SupplyPath {
   id: string;

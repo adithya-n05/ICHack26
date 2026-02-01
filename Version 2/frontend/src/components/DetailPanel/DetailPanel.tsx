@@ -28,6 +28,9 @@ interface Connection {
 interface DetailPanelProps {
   selectedNode: Company | null;
   selectedConnection: Connection | null;
+  riskReason?: string | null;
+  riskCategory?: string | null;
+  riskLoading?: boolean;
   onClose: () => void;
 }
 
@@ -52,7 +55,14 @@ const formatRevenue = (revenue?: number) => {
   return `$${revenue.toLocaleString()}`;
 };
 
-export function DetailPanel({ selectedNode, selectedConnection, onClose }: DetailPanelProps) {
+export function DetailPanel({
+  selectedNode,
+  selectedConnection,
+  riskReason,
+  riskCategory,
+  riskLoading,
+  onClose,
+}: DetailPanelProps) {
   // Show connection panel if connection selected
   if (selectedConnection) {
     return (
@@ -107,6 +117,17 @@ export function DetailPanel({ selectedNode, selectedConnection, onClose }: Detai
             <span className="text-text-primary text-sm capitalize">{selectedConnection.status}</span>
           </div>
         </section>
+
+        {(riskLoading || riskReason || riskCategory) && (
+          <section className="mb-4">
+            <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+              Risk Reason
+            </h3>
+            <p className="text-text-primary text-sm leading-relaxed">
+              {riskLoading ? 'Loading risk reason...' : riskReason || 'No risk reason available.'}
+            </p>
+          </section>
+        )}
 
         {selectedConnection.materials && selectedConnection.materials.length > 0 && (
           <section className="mb-4">
@@ -255,10 +276,25 @@ export function DetailPanel({ selectedNode, selectedConnection, onClose }: Detai
           Risk Status
         </h3>
         <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full bg-accent-green"></span>
-          <span className="text-text-primary text-sm">Healthy</span>
+          <span
+            className={`w-3 h-3 rounded-full ${STATUS_COLORS[riskCategory || 'healthy'] || 'bg-gray-500'}`}
+          ></span>
+          <span className="text-text-primary text-sm capitalize">
+            {riskCategory || 'healthy'}
+          </span>
         </div>
       </section>
+
+      {(riskLoading || riskReason || riskCategory) && (
+        <section className="mb-4">
+          <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+            Risk Reason
+          </h3>
+          <p className="text-text-primary text-sm leading-relaxed">
+            {riskLoading ? 'Loading risk reason...' : riskReason || 'No risk reason available.'}
+          </p>
+        </section>
+      )}
     </aside>
   );
 }
