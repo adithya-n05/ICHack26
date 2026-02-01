@@ -39,7 +39,7 @@ async function saveNews(newsItems: any[]) {
       title: news.title,
       description: news.description,
       source: news.source,
-      url: news.url,
+      source_url: news.url,
       published_at: news.publishedAt,
       category: news.category,
     }, { onConflict: 'id' });

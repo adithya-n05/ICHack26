@@ -1,4 +1,6 @@
 // backend/src/services/gdelt.ts
+import { getCountryCoordinates } from './countryCoordinates';
+
 export interface GdeltEvent {
   id: string;
   type: 'geopolitical' | 'natural_disaster' | 'trade' | 'infrastructure';
@@ -69,20 +71,22 @@ export async function fetchGdeltEvents(): Promise<GdeltEvent[]> {
 
     const articles = data.articles || [];
 
-    return articles.map((article: any) => ({
-      id: `gdelt-${article.url ? Buffer.from(article.url).toString('base64').slice(0, 20) : Date.now()}`,
-      type: categorizeEvent(article.title || ''),
-      title: article.title || 'Untitled',
-      description: article.seendate || '',
-      location: {
-        lat: article.sourcecountry ? 0 : 0,
-        lng: 0,
-      },
-      severity: calculateSeverity(article.tone || 0),
-      startDate: article.seendate || new Date().toISOString(),
-      source: 'GDELT',
-      url: article.url,
-    }));
+    return articles.map((article: any) => {
+      // Get coordinates from country code, with fallback to (0,0)
+      const coords = getCountryCoordinates(article.sourcecountry) || { lat: 0, lng: 0 };
+      
+      return {
+        id: `gdelt-${article.url ? Buffer.from(article.url).toString('base64').slice(0, 20) : Date.now()}`,
+        type: categorizeEvent(article.title || ''),
+        title: article.title || 'Untitled',
+        description: article.seendate || '',
+        location: coords,
+        severity: calculateSeverity(article.tone || 0),
+        startDate: article.seendate || new Date().toISOString(),
+        source: 'GDELT',
+        url: article.url,
+      };
+    });
   } catch (error) {
     console.error('GDELT fetch error:', error);
     return [];
