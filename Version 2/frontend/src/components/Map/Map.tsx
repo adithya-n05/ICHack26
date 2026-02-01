@@ -12,7 +12,9 @@ interface Company {
   id: string;
   name: string;
   type: string;
-  location: { lat: number; lng: number };
+  location?: { lat: number; lng: number };
+  lat?: number | null;
+  lng?: number | null;
   city: string;
   country: string;
   description?: string;
@@ -37,10 +39,14 @@ interface GeoEvent {
   id: string;
   type: string;
   title: string;
-  location: { lat: number; lng: number };
+  location?: { lat: number; lng: number };
+  lat?: number | null;
+  lng?: number | null;
   severity: number;
   polygon?: Array<{ lat: number; lng: number }>;
 }
+
+type HeatmapEvent = GeoEvent & { contour: Array<[number, number]> };
 
 const EVENT_COLORS: Record<string, [number, number, number, number]> = {
   war: [255, 0, 0, 150],
@@ -124,17 +130,50 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
   }, []);
 
   // Helper to get node position by ID
+  const getCompanyPosition = useCallback((company: Company): [number, number] | null => {
+    if (company.location) {
+      return [company.location.lng, company.location.lat];
+    }
+    if (typeof company.lat === 'number' && typeof company.lng === 'number') {
+      return [company.lng, company.lat];
+    }
+    return null;
+  }, []);
+
+  const getEventPosition = useCallback((event: GeoEvent): { lat: number; lng: number } | null => {
+    if (event.location) {
+      return event.location;
+    }
+    if (typeof event.lat === 'number' && typeof event.lng === 'number') {
+      return { lat: event.lat, lng: event.lng };
+    }
+    return null;
+  }, []);
+
   const getNodePosition = useCallback((nodeId: string): [number, number] | null => {
     const node = nodes.find(n => n.id === nodeId);
-    return node ? [node.location.lng, node.location.lat] : null;
-  }, [nodes]);
+    return node ? getCompanyPosition(node) : null;
+  }, [nodes, getCompanyPosition]);
 
   const getLayers = useCallback(() => {
+    const heatmapData: HeatmapEvent[] = events
+      .map((event) => {
+        const location = getEventPosition(event);
+        if (!location) return null;
+        return {
+          ...event,
+          contour: event.polygon
+            ? event.polygon.map((point) => [point.lng, point.lat] as [number, number])
+            : createCirclePolygon(location, Math.max(event.severity * 50, 100)),
+        };
+      })
+      .filter((event): event is HeatmapEvent => event !== null);
+
     return [
       new ScatterplotLayer<Company>({
         id: 'nodes',
         data: nodes,
-        getPosition: (d) => [d.location.lng, d.location.lat],
+        getPosition: (company) => getCompanyPosition(company) ?? [0, 0],
         getRadius: (d) => (hoveredNode?.id === d.id ? 80000 : 50000),
         radiusMinPixels: 6,
         radiusMaxPixels: 25,
@@ -191,17 +230,12 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
           getWidth: connections.map(c => c.is_user_connection),
         },
       }),
-      new PolygonLayer({
+      new PolygonLayer<HeatmapEvent>({
         id: 'heatmaps',
-        data: events.map(e => ({
-          ...e,
-          contour: e.polygon
-            ? e.polygon.map((p) => [p.lng, p.lat])
-            : createCirclePolygon(e.location, Math.max(e.severity * 50, 100)),
-        })),
-        getPolygon: (d: any) => d.contour,
-        getFillColor: (d: any) => {
-          const baseColor = EVENT_COLORS[d.type] || [128, 128, 128, 150];
+        data: heatmapData,
+        getPolygon: (event) => event.contour,
+        getFillColor: (event) => {
+          const baseColor = EVENT_COLORS[event.type] || [128, 128, 128, 150];
           const pulse = Math.sin(animationTime * 2) * 0.2 + 0.8;
           return [baseColor[0], baseColor[1], baseColor[2], baseColor[3] * pulse];
         },
@@ -212,7 +246,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
         filled: true,
         stroked: true,
         pickable: true,
-        onClick: (info: any) => {
+        onClick: (info: { object?: HeatmapEvent | null }) => {
           if (info.object) {
             console.log('Event clicked:', info.object.title);
           }
@@ -222,7 +256,24 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
         },
       }),
     ];
-  }, [nodes, connections, events, hoveredNode, animationTime, onNodeClick, onConnectionClick, getNodePosition]);
+  }, [
+    nodes,
+    connections,
+    events,
+    hoveredNode,
+    animationTime,
+    onNodeClick,
+    onConnectionClick,
+    getNodePosition,
+    getCompanyPosition,
+    getEventPosition,
+  ]);
+
+  const getLayersRef = useRef(getLayers);
+
+  useEffect(() => {
+    getLayersRef.current = getLayers;
+  }, [getLayers]);
 
   useEffect(() => {
     let animationFrameId: number;
@@ -245,7 +296,7 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
       zoom: 2,
     });
 
-    map.current.on('style.load', () => {
+    map.current.once('load', () => {
       map.current?.setFog({
         color: 'rgb(13, 13, 13)',
         'high-color': 'rgb(26, 26, 26)',
@@ -254,12 +305,17 @@ export function Map({ onNodeClick, onConnectionClick }: MapProps) {
         'star-intensity': 0.6,
       });
 
-      deckOverlay.current = new MapboxOverlay({ layers: getLayers() });
+      deckOverlay.current = new MapboxOverlay({
+        interleaved: false,
+        layers: getLayersRef.current(),
+      });
       map.current?.addControl(deckOverlay.current as unknown as mapboxgl.IControl);
     });
 
     return () => {
       map.current?.remove();
+      map.current = null;
+      deckOverlay.current = null;
     };
   }, []);
 
