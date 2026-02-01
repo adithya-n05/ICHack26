@@ -7,6 +7,7 @@ import { socket } from './lib/socket';
 import { usePaths } from './hooks/usePaths';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const LOCAL_STORAGE_KEY = 'sentinel-user-connections';
 
 interface Company {
   id: string;
@@ -72,28 +73,15 @@ interface NewsItem {
   category?: string;
 }
 
-interface Event {
-  id: string;
-  type: string;
-  title: string;
-  description?: string;
-  location?: { lat: number; lng: number };
-  lat?: number | null;
-  lng?: number | null;
-  severity: number;
-  startDate?: string;
-  endDate?: string;
-  source?: string;
-  polygon?: Array<{ lat: number; lng: number }>;
-}
-
 function App() {
   const [selectedNode, setSelectedNode] = useState<Company | null>(null);
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [mapRefreshKey, setMapRefreshKey] = useState(0);
+  const [userConnections, setUserConnections] = useState<Connection[]>([]);
+  const [connectMode, setConnectMode] = useState(false);
+  const [pendingConnection, setPendingConnection] = useState<Company | null>(null);
   const { edges: pathEdges, loading: pathsLoading, error: pathsError } = usePaths(selectedNode?.id);
   const [alternativeSuppliers, setAlternativeSuppliers] = useState<Company[]>([]);
   const [alternativesLoading, setAlternativesLoading] = useState(false);
@@ -105,6 +93,27 @@ function App() {
   }, [pathEdges, selectedNode]);
   const alternativeMaterial = firstAmberEdge?.materials?.[0];
   const shouldFetchAlternatives = Boolean(selectedNode && firstAmberEdge && alternativeMaterial);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        setUserConnections(parsed);
+      }
+    } catch (err) {
+      console.warn('Failed to load user connections:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(userConnections));
+    } catch (err) {
+      console.warn('Failed to persist user connections:', err);
+    }
+  }, [userConnections]);
 
   // Fetch initial news
   useEffect(() => {
@@ -210,6 +219,20 @@ function App() {
     return null;
   };
 
+  const createUserConnectionId = () => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return `user-${crypto.randomUUID()}`;
+    }
+    return `user-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+  };
+
+  const isDuplicateUserConnection = (fromId: string, toId: string) =>
+    userConnections.some(
+      (connection) =>
+        (connection.from_node_id === fromId && connection.to_node_id === toId) ||
+        (connection.from_node_id === toId && connection.to_node_id === fromId),
+    );
+
   const handleNodeClick = (node: MapCompany) => {
     const normalizedNode = normalizeCompany(node);
     if (!normalizedNode) {
@@ -217,8 +240,46 @@ function App() {
       return;
     }
     console.log('Node clicked:', node.name);
+
+    if (connectMode) {
+      setSelectedNode(null);
+      setSelectedConnection(null);
+
+      if (!pendingConnection) {
+        setPendingConnection(normalizedNode);
+        return;
+      }
+
+      if (pendingConnection.id === normalizedNode.id) {
+        setPendingConnection(null);
+        return;
+      }
+
+      if (isDuplicateUserConnection(pendingConnection.id, normalizedNode.id)) {
+        setPendingConnection(null);
+        return;
+      }
+
+      const newConnection: Connection = {
+        id: createUserConnectionId(),
+        from_node_id: pendingConnection.id,
+        to_node_id: normalizedNode.id,
+        transport_mode: 'land',
+        status: 'healthy',
+        is_user_connection: true,
+      };
+
+      setUserConnections((prev) => [...prev, newConnection]);
+      setSelectedConnection({
+        ...newConnection,
+        fromNode: pendingConnection,
+        toNode: normalizedNode,
+      });
+      setPendingConnection(null);
+      return;
+    }
+
     setSelectedConnection(null);
-    setSelectedEvent(null);
     setSelectedNode(normalizedNode);
   };
 
@@ -227,7 +288,6 @@ function App() {
     const toNode = connection.toNode ? normalizeCompany(connection.toNode) ?? undefined : undefined;
     console.log('Connection clicked:', connection.id);
     setSelectedNode(null);
-    setSelectedEvent(null);
     setSelectedConnection({
       ...connection,
       fromNode,
@@ -235,17 +295,16 @@ function App() {
     });
   };
 
-  const handleEventClick = (event: Event) => {
-    console.log('Event clicked:', event.title);
-    setSelectedNode(null);
-    setSelectedConnection(null);
-    setSelectedEvent(event);
-  };
-
   const handleClosePanel = () => {
     setSelectedNode(null);
     setSelectedConnection(null);
-    setSelectedEvent(null);
+  };
+
+  const toggleConnectMode = () => {
+    setConnectMode((prev) => !prev);
+    setPendingConnection(null);
+    setSelectedNode(null);
+    setSelectedConnection(null);
   };
 
   const handleSupplierFormSuccess = () => {
@@ -259,12 +318,24 @@ function App() {
       {/* Header with Add Supply Chain button */}
       <header className="h-14 bg-bg-secondary border-b border-border-color flex items-center justify-between px-4">
         <h1 className="text-accent-cyan font-mono text-lg font-bold">SENTINEL ZERO</h1>
-        <button
-          onClick={() => setShowSupplierForm(true)}
-          className="px-3 py-1 bg-accent-cyan text-bg-primary rounded font-mono text-sm hover:opacity-90"
-        >
-          + Add Supply Chain
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleConnectMode}
+            className={`px-3 py-1 rounded font-mono text-sm border transition ${
+              connectMode
+                ? 'bg-accent-cyan/20 text-accent-cyan border-accent-cyan'
+                : 'bg-bg-tertiary text-text-primary border-border-color hover:border-accent-cyan/70'
+            }`}
+          >
+            {connectMode ? 'Connect Mode: On' : 'Connect Nodes'}
+          </button>
+          <button
+            onClick={() => setShowSupplierForm(true)}
+            className="px-3 py-1 bg-accent-cyan text-bg-primary rounded font-mono text-sm hover:opacity-90"
+          >
+            + Add Supply Chain
+          </button>
+        </div>
       </header>
 
       {/* Main content area */}
@@ -273,14 +344,30 @@ function App() {
           key={mapRefreshKey}
           onNodeClick={handleNodeClick}
           onConnectionClick={handleConnectionClick}
-          onEventClick={handleEventClick}
           pathEdges={pathEdges as PathEdge[]}
           alternativeSuppliers={effectiveAlternativeSuppliers}
+          userConnections={userConnections}
         />
+        {connectMode && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-bg-secondary/95 border border-border-color px-4 py-3 rounded shadow-lg">
+            <div className="text-accent-cyan text-[11px] font-mono uppercase tracking-wider">
+              Connect Mode
+            </div>
+            <div className="text-text-primary text-sm mt-1">
+              {pendingConnection
+                ? `Select destination for ${pendingConnection.name}`
+                : 'Select the first node to start a connection.'}
+            </div>
+            {pendingConnection && (
+              <div className="text-text-secondary text-xs mt-1">
+                From: {pendingConnection.name}
+              </div>
+            )}
+          </div>
+        )}
         <DetailPanel
           selectedNode={selectedNode}
           selectedConnection={selectedConnection}
-          selectedEvent={selectedEvent}
           onClose={handleClosePanel}
           alternativeSuppliers={effectiveAlternativeSuppliers}
           riskyPathEdge={effectiveRiskyPathEdge}

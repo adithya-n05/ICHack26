@@ -14,11 +14,11 @@ interface NewsTickerProps {
 }
 
 export function NewsTicker({ items }: NewsTickerProps) {
-  const isEmpty = items.length === 0;
   const transitionMs = 600;
   const dwellMs = 3200;
   const cycleMs = transitionMs + dwellMs;
   const itemHeightPx = 48;
+  const hasItems = items.length > 0;
   const [activeIndex, setActiveIndex] = useState(0);
   const [isResetting, setIsResetting] = useState(false);
 
@@ -58,7 +58,7 @@ export function NewsTicker({ items }: NewsTickerProps) {
     return () => clearTimeout(timeout);
   }, [activeIndex, items.length, transitionMs]);
 
-  if (isEmpty) {
+  if (!hasItems) {
     return (
       <div
         data-testid="news-ticker"

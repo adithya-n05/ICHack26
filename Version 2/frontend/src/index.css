@@ -38,27 +38,38 @@ body {
 }
 
 /* Mapbox popup theming to match app */
-.mapboxgl-popup-content {
-  background-color: var(--color-bg-secondary);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
-  padding: 12px 14px;
+.mapboxgl-popup .mapboxgl-popup-content {
+  background-color: var(--color-bg-secondary) !important;
+  color: var(--color-text-primary) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45) !important;
+  padding: 12px 14px !important;
 }
 
-.mapboxgl-popup-tip {
-  border-top-color: var(--color-bg-secondary);
-  border-bottom-color: var(--color-bg-secondary);
+.mapboxgl-popup-anchor-top .mapboxgl-popup-tip {
+  border-bottom-color: var(--color-bg-secondary) !important;
+}
+
+.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip {
+  border-top-color: var(--color-bg-secondary) !important;
+}
+
+.mapboxgl-popup-anchor-left .mapboxgl-popup-tip {
+  border-right-color: var(--color-bg-secondary) !important;
+}
+
+.mapboxgl-popup-anchor-right .mapboxgl-popup-tip {
+  border-left-color: var(--color-bg-secondary) !important;
 }
 
 .mapboxgl-popup-close-button {
-  color: var(--color-text-secondary);
-  font-size: 18px;
-  padding: 4px 6px;
+  color: var(--color-text-secondary) !important;
+  font-size: 18px !important;
+  padding: 4px 6px !important;
 }
 
 .mapboxgl-popup-close-button:hover {
-  color: var(--color-text-primary);
-  background: transparent;
+  color: var(--color-text-primary) !important;
+  background: transparent !important;
 }

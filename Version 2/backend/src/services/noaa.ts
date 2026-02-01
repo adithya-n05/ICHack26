@@ -11,6 +11,13 @@ export interface WeatherAlert {
   source: string;
 }
 
+function normalizeDate(value?: string | null): string | null {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return null;
+  return new Date(parsed).toISOString();
+}
+
 export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
   try {
     // NOAA Active Alerts API (US only)
@@ -42,8 +49,8 @@ export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
         for (let i = 0; i < coords.length - 1; i += 2) {
           const lngVal = coords[i];
           const latVal = coords[i + 1];
-          if (typeof lngVal === 'number' && typeof latVal === 'number' && 
-              !isNaN(lngVal) && !isNaN(latVal)) {
+          if (typeof lngVal === 'number' && typeof latVal === 'number' &&
+            !isNaN(lngVal) && !isNaN(latVal)) {
             sumLng += lngVal;
             sumLat += latVal;
             count++;
@@ -63,6 +70,15 @@ export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
         'Unknown': 1,
       };
 
+      const startDate =
+        normalizeDate(props.onset) ||
+        normalizeDate(props.effective) ||
+        normalizeDate(props.sent) ||
+        normalizeDate(props.ends) ||
+        normalizeDate(props.expires) ||
+        new Date().toISOString();
+      const endDate = normalizeDate(props.expires) || normalizeDate(props.ends) || undefined;
+
       return {
         id: `noaa-${props.id}`,
         type: 'weather' as const,
@@ -70,8 +86,8 @@ export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
         description: props.description?.slice(0, 500) || '',
         location: { lat, lng },
         severity: severityMap[props.severity] || 5,
-        startDate: props.onset || props.effective || new Date().toISOString(),
-        endDate: props.expires,
+        startDate,
+        endDate,
         source: 'NOAA',
       };
     });

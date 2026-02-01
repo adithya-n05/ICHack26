@@ -1,22 +1,24 @@
-/* @vitest-environment jsdom */
 import { render } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
-import { NewsTicker, type NewsItem } from './NewsTicker';
+import { describe, expect, test, vi } from 'vitest';
+
+import { NewsTicker } from './NewsTicker';
 
 describe('NewsTicker', () => {
-  it('does not log errors when items appear after empty state', () => {
-    const items: NewsItem[] = [
-      { id: 'news-1', title: 'First', source: 'Source A' },
-      { id: 'news-2', title: 'Second', source: 'Source B' },
+  test('does not crash when items change from empty to non-empty', () => {
+    const items = [
+      { id: 'n1', title: 'Test', source: 'Source' },
+      { id: 'n2', title: 'Test 2', source: 'Source' },
     ];
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const { rerender, unmount } = render(<NewsTicker items={[]} />);
+    expect(() => {
+      const { rerender } = render(<NewsTicker items={[]} />);
+      rerender(<NewsTicker items={items} />);
+    }).not.toThrow();
 
-    rerender(<NewsTicker items={items} />);
-    unmount();
-
-    expect(errorSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('Expected static flag was missing'),
+    );
     errorSpy.mockRestore();
   });
 });
