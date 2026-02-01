@@ -170,6 +170,18 @@ ALTER TABLE connections ADD COLUMN IF NOT EXISTS risk_score DOUBLE PRECISION;
 ALTER TABLE connections ADD COLUMN IF NOT EXISTS tariff_cost DOUBLE PRECISION;
 ALTER TABLE connections ADD COLUMN IF NOT EXISTS product_category TEXT;
 ALTER TABLE connections ADD COLUMN IF NOT EXISTS is_path_edge BOOLEAN DEFAULT FALSE;
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS materials JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS unit_cost DOUBLE PRECISION;
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS currency TEXT;
+
+-- Add missing columns to suppliers table
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS materials JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS price_catalog JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS website TEXT;
 
 -- Add missing columns to tariffs table
 ALTER TABLE tariffs ADD COLUMN IF NOT EXISTS hs_codes JSONB DEFAULT '[]'::jsonb; -- Harmonized System codes
