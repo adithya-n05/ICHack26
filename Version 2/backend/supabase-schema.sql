@@ -1,0 +1,163 @@
+-- Sentinel Zero Database Schema
+-- Run this in Supabase SQL Editor (https://supabase.com/dashboard/project/bgnqpyncwndrggmtbgcq/sql)
+
+-- Companies table (includes companies, ports, and other nodes)
+CREATE TABLE IF NOT EXISTS companies (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT, -- 'foundry', 'fabless', 'equipment', 'port', etc.
+  country TEXT,
+  city TEXT,
+  lat DOUBLE PRECISION,
+  lng DOUBLE PRECISION,
+  products JSONB DEFAULT '[]'::jsonb, -- array of products/materials
+  description TEXT,
+  tier INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Suppliers table
+CREATE TABLE IF NOT EXISTS suppliers (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  company_id TEXT REFERENCES companies(id),
+  name TEXT NOT NULL,
+  tier INTEGER,
+  country TEXT,
+  products JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Connections table (supply chain links)
+CREATE TABLE IF NOT EXISTS connections (
+  id TEXT PRIMARY KEY,
+  from_node_id TEXT REFERENCES companies(id),
+  to_node_id TEXT REFERENCES companies(id),
+  status TEXT DEFAULT 'active', -- 'active', 'at-risk', 'disrupted'
+  is_user_connection BOOLEAN DEFAULT FALSE,
+  material TEXT,
+  volume DOUBLE PRECISION,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Events table (disasters, disruptions, geopolitical events)
+CREATE TABLE IF NOT EXISTS events (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  type TEXT NOT NULL, -- 'natural_disaster', 'geopolitical', 'economic', 'infrastructure'
+  title TEXT NOT NULL,
+  description TEXT,
+  severity INTEGER CHECK (severity >= 1 AND severity <= 10),
+  lat DOUBLE PRECISION,
+  lng DOUBLE PRECISION,
+  radius DOUBLE PRECISION, -- affected radius in km
+  country TEXT,
+  region TEXT,
+  start_date TIMESTAMPTZ DEFAULT NOW(),
+  end_date TIMESTAMPTZ, -- NULL if ongoing
+  source TEXT,
+  source_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Tariffs table
+CREATE TABLE IF NOT EXISTS tariffs (
+  id TEXT PRIMARY KEY,
+  from_country TEXT NOT NULL,
+  to_country TEXT NOT NULL,
+  product_category TEXT,
+  rate DOUBLE PRECISION, -- percentage
+  description TEXT,
+  effective_date TIMESTAMPTZ,
+  expiry_date TIMESTAMPTZ,
+  source TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- News table
+CREATE TABLE IF NOT EXISTS news (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  title TEXT NOT NULL,
+  description TEXT,
+  content TEXT,
+  category TEXT, -- 'supply_chain', 'geopolitical', 'economic', 'technology'
+  source TEXT,
+  source_url TEXT,
+  image_url TEXT,
+  published_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- User supply chains table (stores user's custom supply chain)
+CREATE TABLE IF NOT EXISTS user_supply_chains (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  company_name TEXT NOT NULL,
+  company_city TEXT,
+  company_country TEXT,
+  suppliers JSONB DEFAULT '[]'::jsonb,
+  materials JSONB DEFAULT '[]'::jsonb,
+  connections JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create indexes for common queries
+CREATE INDEX IF NOT EXISTS idx_companies_type ON companies(type);
+CREATE INDEX IF NOT EXISTS idx_companies_country ON companies(country);
+CREATE INDEX IF NOT EXISTS idx_companies_location ON companies(lat, lng);
+
+CREATE INDEX IF NOT EXISTS idx_suppliers_company ON suppliers(company_id);
+CREATE INDEX IF NOT EXISTS idx_suppliers_tier ON suppliers(tier);
+
+CREATE INDEX IF NOT EXISTS idx_connections_status ON connections(status);
+CREATE INDEX IF NOT EXISTS idx_connections_from ON connections(from_node_id);
+CREATE INDEX IF NOT EXISTS idx_connections_to ON connections(to_node_id);
+
+CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
+CREATE INDEX IF NOT EXISTS idx_events_severity ON events(severity);
+CREATE INDEX IF NOT EXISTS idx_events_location ON events(lat, lng);
+CREATE INDEX IF NOT EXISTS idx_events_dates ON events(start_date, end_date);
+
+CREATE INDEX IF NOT EXISTS idx_tariffs_countries ON tariffs(from_country, to_country);
+CREATE INDEX IF NOT EXISTS idx_tariffs_category ON tariffs(product_category);
+
+CREATE INDEX IF NOT EXISTS idx_news_category ON news(category);
+CREATE INDEX IF NOT EXISTS idx_news_published ON news(published_at DESC);
+
+-- Enable Row Level Security (optional, but recommended)
+ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE connections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tariffs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE news ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_supply_chains ENABLE ROW LEVEL SECURITY;
+
+-- Create policies to allow service role full access
+CREATE POLICY "Service role has full access to companies" ON companies FOR ALL USING (true);
+CREATE POLICY "Service role has full access to suppliers" ON suppliers FOR ALL USING (true);
+CREATE POLICY "Service role has full access to connections" ON connections FOR ALL USING (true);
+CREATE POLICY "Service role has full access to events" ON events FOR ALL USING (true);
+CREATE POLICY "Service role has full access to tariffs" ON tariffs FOR ALL USING (true);
+CREATE POLICY "Service role has full access to news" ON news FOR ALL USING (true);
+CREATE POLICY "Service role has full access to user_supply_chains" ON user_supply_chains FOR ALL USING (true);
+
+-- Additional columns needed for seed data
+-- Add missing columns to companies table
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS annual_revenue_usd BIGINT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS annual_teu BIGINT; -- for ports (Twenty-foot Equivalent Units)
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS employee_count INTEGER;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS founded_year INTEGER;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS website TEXT;
+
+-- Add missing columns to connections table
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS annual_volume_units BIGINT;
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS transport_mode TEXT; -- 'sea', 'air', 'land'
+ALTER TABLE connections ADD COLUMN IF NOT EXISTS lead_time_days INTEGER;
+
+-- Add missing columns to tariffs table
+ALTER TABLE tariffs ADD COLUMN IF NOT EXISTS hs_codes JSONB DEFAULT '[]'::jsonb; -- Harmonized System codes
+ALTER TABLE tariffs ADD COLUMN IF NOT EXISTS affected_products JSONB DEFAULT '[]'::jsonb;
