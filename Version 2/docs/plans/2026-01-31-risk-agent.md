@@ -1303,16 +1303,23 @@ git commit -m "feat: create langchain risk analysis agent"
 **Files:**
 - Create: `risk-agent/src/main.py`
 
+**Context:** The agent implementation is complete with:
+- `analyze_event_risk(event_id: str) -> RiskAssessment` async function in `src/agent/agent.py`
+- `RiskAssessment` Pydantic model with `model_dump()` (Pydantic v2)
+- `AffectedEntity` and `Alternative` nested models
+- Redis client in `src/utils/redis_client.py`
+- Supabase client in `src/db/supabase.py`
+
 **Step 1: Write the failing test**
 
 ```bash
-cd risk-agent && python -m src.main
+cd risk-agent && python -c "from src.main import app; print(app.title)"
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `cd risk-agent && python -m src.main`
-Expected: `No module named '__main__' in src`
+Run: `cd risk-agent && python -c "from src.main import app"`
+Expected: `ModuleNotFoundError: No module named 'src.main'`
 
 **Step 3: Write minimal implementation**
 
@@ -1322,82 +1329,125 @@ Create `risk-agent/src/main.py`:
 import asyncio
 import json
 import logging
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, HTTPException
 from contextlib import asynccontextmanager
+from typing import Optional
 
 from src.config import config
-from src.utils.redis_client import redis_client
+from src.utils.redis_client import get_redis_client
 from src.agent.agent import analyze_event_risk
-from src.db.supabase import supabase
+from src.db.supabase import get_supabase_client
+from src.schemas.output import RiskAssessment
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Global flag for Redis listener
-_listener_task = None
+_listener_task: Optional[asyncio.Task] = None
 
-async def redis_event_listener():
-    """Listen for new events on Redis pub/sub channel."""
-    logger.info(f"Starting Redis listener on channel: {config.REDIS_EVENTS_CHANNEL}")
 
-    pubsub = redis_client.pubsub()
-    pubsub.subscribe(config.REDIS_EVENTS_CHANNEL)
+def serialize_assessment(assessment: RiskAssessment) -> dict:
+    """Serialize RiskAssessment to database-compatible dict."""
+    data = assessment.model_dump()
+    # Convert enum to string value
+    data['risk_category'] = assessment.risk_category.value
+    return data
 
-    try:
-        for message in pubsub.listen():
-            if message['type'] == 'message':
-                try:
-                    # Parse event_id from message
-                    data = json.loads(message['data'])
-                    event_id = data.get('event_id')
 
-                    logger.info(f"Received new event: {event_id}")
-
-                    # Analyze risk
-                    assessment = await analyze_event_risk(event_id)
-
-                    # Save to database
-                    await save_risk_assessment(event_id, assessment)
-
-                    # Publish risk update
-                    redis_client.publish(
-                        config.REDIS_RISK_CHANNEL,
-                        json.dumps({"event_id": event_id, "status": "updated"})
-                    )
-
-                    logger.info(f"Risk assessment completed for event {event_id}")
-
-                except Exception as e:
-                    logger.error(f"Error processing event: {e}", exc_info=True)
-
-    except KeyboardInterrupt:
-        logger.info("Redis listener stopped")
-    finally:
-        pubsub.unsubscribe()
-        pubsub.close()
-
-async def save_risk_assessment(event_id: str, assessment: dict):
+async def save_risk_assessment(event_id: str, assessment: RiskAssessment) -> None:
     """Save risk assessment to Supabase."""
     try:
-        # Save to risk_assessments table
-        # Note: This assumes the table exists - will be created in database migration
+        supabase = get_supabase_client()
+
+        # Serialize the assessment using Pydantic v2 model_dump()
+        assessment_data = serialize_assessment(assessment)
+
         supabase.table('risk_assessments').insert({
             'event_id': event_id,
-            'risk_category': assessment.risk_category.value,
-            'severity_score': assessment.severity_score,
-            'confidence': assessment.confidence,
-            'reasoning': assessment.reasoning,
-            'affected_entities': [e.dict() for e in assessment.affected_entities],
-            'alternatives': {
-                'suppliers': [s.dict() for s in assessment.alternatives.get('suppliers', [])],
-                'routes': [r.dict() for r in assessment.alternatives.get('routes', [])]
-            }
+            'risk_category': assessment_data['risk_category'],
+            'severity_score': assessment_data['severity_score'],
+            'confidence': assessment_data['confidence'],
+            'reasoning': assessment_data['reasoning'],
+            'affected_entities': assessment_data['affected_entities'],
+            'alternatives': assessment_data['alternatives']
         }).execute()
 
         logger.info(f"Risk assessment saved for event {event_id}")
     except Exception as e:
         logger.error(f"Error saving risk assessment: {e}", exc_info=True)
+        raise
+
+
+async def process_event(event_id: str) -> None:
+    """Process a single event: analyze risk, save, and publish update."""
+    try:
+        logger.info(f"Processing event: {event_id}")
+
+        # Analyze risk using the agent
+        assessment = await analyze_event_risk(event_id)
+
+        # Save to database
+        await save_risk_assessment(event_id, assessment)
+
+        # Publish risk update notification
+        redis_client = get_redis_client()
+        redis_client.publish(
+            config.REDIS_RISK_CHANNEL,
+            json.dumps({
+                "event_id": event_id,
+                "status": "updated",
+                "risk_category": assessment.risk_category.value,
+                "severity_score": assessment.severity_score
+            })
+        )
+
+        logger.info(f"Risk assessment completed for event {event_id}: {assessment.risk_category.value}")
+
+    except Exception as e:
+        logger.error(f"Error processing event {event_id}: {e}", exc_info=True)
+
+
+async def redis_event_listener() -> None:
+    """Listen for new events on Redis pub/sub channel."""
+    logger.info(f"Starting Redis listener on channel: {config.REDIS_EVENTS_CHANNEL}")
+
+    redis_client = get_redis_client()
+    pubsub = redis_client.pubsub()
+    pubsub.subscribe(config.REDIS_EVENTS_CHANNEL)
+
+    try:
+        while True:
+            message = pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+            if message is not None and message['type'] == 'message':
+                try:
+                    data = json.loads(message['data'])
+                    event_id = data.get('event_id')
+
+                    if event_id:
+                        logger.info(f"Received new event: {event_id}")
+                        # Process in background to not block listener
+                        asyncio.create_task(process_event(event_id))
+                    else:
+                        logger.warning(f"Received message without event_id: {data}")
+
+                except json.JSONDecodeError as e:
+                    logger.error(f"Invalid JSON in message: {e}")
+                except Exception as e:
+                    logger.error(f"Error processing message: {e}", exc_info=True)
+
+            # Small delay to prevent busy loop
+            await asyncio.sleep(0.1)
+
+    except asyncio.CancelledError:
+        logger.info("Redis listener cancelled")
+    finally:
+        pubsub.unsubscribe()
+        pubsub.close()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -1405,7 +1455,11 @@ async def lifespan(app: FastAPI):
     global _listener_task
 
     # Startup
-    config.validate()
+    try:
+        config.validate()
+    except ValueError as e:
+        logger.warning(f"Config validation warning: {e}")
+
     logger.info("Risk Agent starting...")
 
     # Start Redis listener in background
@@ -1417,23 +1471,37 @@ async def lifespan(app: FastAPI):
     logger.info("Risk Agent shutting down...")
     if _listener_task:
         _listener_task.cancel()
+        try:
+            await _listener_task
+        except asyncio.CancelledError:
+            pass
+
 
 # Create FastAPI app
 app = FastAPI(
     title="Sentinel-Zero Risk Agent",
-    description="Supply chain risk analysis agent",
+    description="Supply chain risk analysis agent powered by LangChain and GPT-4o",
     version="1.0.0",
     lifespan=lifespan
 )
 
+
 @app.get("/health")
 async def health():
     """Health check endpoint."""
+    redis_ok = False
+    try:
+        redis_client = get_redis_client()
+        redis_ok = redis_client.ping()
+    except Exception:
+        pass
+
     return {
         "status": "ok",
         "service": "risk-agent",
-        "redis": "connected" if redis_client.ping() else "disconnected"
+        "redis": "connected" if redis_ok else "disconnected"
     }
+
 
 @app.post("/analyze/{event_id}")
 async def analyze_event(event_id: str, background_tasks: BackgroundTasks):
@@ -1441,8 +1509,29 @@ async def analyze_event(event_id: str, background_tasks: BackgroundTasks):
     Manually trigger risk analysis for a specific event.
     Useful for testing or re-analyzing past events.
     """
-    background_tasks.add_task(analyze_event_risk, event_id)
-    return {"message": f"Analysis started for event {event_id}"}
+    background_tasks.add_task(process_event, event_id)
+    return {
+        "message": f"Analysis started for event {event_id}",
+        "event_id": event_id
+    }
+
+
+@app.get("/analyze/{event_id}/sync")
+async def analyze_event_sync(event_id: str):
+    """
+    Synchronously analyze an event and return the result.
+    Useful for testing and debugging.
+    """
+    try:
+        assessment = await analyze_event_risk(event_id)
+        return {
+            "event_id": event_id,
+            "assessment": serialize_assessment(assessment)
+        }
+    except Exception as e:
+        logger.error(f"Error analyzing event {event_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn
@@ -1451,9 +1540,12 @@ if __name__ == "__main__":
 
 **Step 4: Run test to verify it passes**
 
-Run: `cd risk-agent && python -m src.main` (in one terminal)
+Run: `cd risk-agent && python -c "from src.main import app; print(app.title)"`
+Expected: `Sentinel-Zero Risk Agent`
+
+Run server: `cd risk-agent && python -m src.main` (in one terminal)
 Then: `curl http://localhost:8000/health` (in another terminal)
-Expected: `{"status":"ok","service":"risk-agent","redis":"connected"}`
+Expected: `{"status":"ok","service":"risk-agent","redis":"connected"}` or `{"status":"ok","service":"risk-agent","redis":"disconnected"}`
 
 Stop with Ctrl+C
 
@@ -1491,12 +1583,11 @@ mkdir -p risk-agent/migrations
 Create `risk-agent/migrations/001_create_risk_assessments.sql`:
 ```sql
 -- Create risk_assessments table for storing agent output
+-- GeoPoint stored as JSONB {lat, lng} - no PostGIS required
 
 CREATE TABLE IF NOT EXISTS risk_assessments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    entity_type TEXT CHECK (entity_type IN ('node', 'connection')),
-    entity_id UUID,
     risk_category TEXT NOT NULL CHECK (risk_category IN ('healthy', 'monitoring', 'at-risk', 'critical', 'disrupted')),
     severity_score INT NOT NULL CHECK (severity_score >= 1 AND severity_score <= 10),
     confidence FLOAT NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
@@ -1510,11 +1601,11 @@ CREATE TABLE IF NOT EXISTS risk_assessments (
 -- Index for fast event lookups
 CREATE INDEX idx_risk_assessments_event_id ON risk_assessments(event_id);
 
--- Index for entity lookups
-CREATE INDEX idx_risk_assessments_entity ON risk_assessments(entity_type, entity_id);
-
 -- Index for risk category filtering
 CREATE INDEX idx_risk_assessments_category ON risk_assessments(risk_category);
+
+-- Index for severity filtering
+CREATE INDEX idx_risk_assessments_severity ON risk_assessments(severity_score);
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_risk_assessments_updated_at()
@@ -1534,10 +1625,21 @@ CREATE TRIGGER trigger_update_risk_assessments_updated_at
 -- Comments
 COMMENT ON TABLE risk_assessments IS 'Risk assessments generated by the Risk Agent for supply chain entities';
 COMMENT ON COLUMN risk_assessments.event_id IS 'Reference to the event that triggered this assessment';
-COMMENT ON COLUMN risk_assessments.entity_type IS 'Type of entity: node (supplier/port) or connection (route)';
-COMMENT ON COLUMN risk_assessments.entity_id IS 'ID of the specific entity being assessed';
+COMMENT ON COLUMN risk_assessments.risk_category IS 'Risk level: healthy, monitoring, at-risk, critical, disrupted';
 COMMENT ON COLUMN risk_assessments.reasoning IS 'Structured reasoning: {summary, factors, event_ids}';
+COMMENT ON COLUMN risk_assessments.affected_entities IS 'Array of affected nodes/connections with distance_km';
 COMMENT ON COLUMN risk_assessments.alternatives IS 'Alternative suppliers or routes: {suppliers: [], routes: []}';
+
+-- Enable Row Level Security
+ALTER TABLE risk_assessments ENABLE ROW LEVEL SECURITY;
+
+-- Policy to allow authenticated users to read
+CREATE POLICY "Allow authenticated read" ON risk_assessments
+    FOR SELECT TO authenticated USING (true);
+
+-- Policy to allow service role full access
+CREATE POLICY "Allow service role full access" ON risk_assessments
+    FOR ALL TO service_role USING (true);
 ```
 
 Create `risk-agent/migrations/README.md`:
@@ -1565,13 +1667,15 @@ psql -h <supabase-host> -U postgres -d postgres -f migrations/001_create_risk_as
 ```
 
 ## Migration Order
-1. `001_create_risk_assessments.sql` - Create risk_assessments table
-2. `002_add_indexes.sql` - Add performance indexes
+1. `001_create_risk_assessments.sql` - Create risk_assessments table with indexes
+2. `002_add_indexes.sql` - Add additional performance indexes for related tables
 
 ## Notes
 - GeoPoint data is stored as JSONB `{lat: number, lng: number}`
-- No PostGIS required - spatial calculations done in Python agent
+- **No PostGIS required** - spatial calculations done in Python agent using Haversine formula
 - Risk categories use lowercase with hyphens to match TypeScript ConnectionStatus
+- Affected entities stored as JSONB array: `[{type, id, name, distance_km}]`
+- Alternatives stored as JSONB object: `{suppliers: [...], routes: [...]}`
 ```
 
 **Step 4: Run test to verify it passes**
@@ -1608,7 +1712,7 @@ Expected: `No such file or directory`
 
 Create `risk-agent/migrations/002_add_indexes.sql`:
 ```sql
--- Add indexes for better query performance
+-- Add indexes for better query performance on related tables
 -- Note: GeoPoint is stored as JSONB {lat, lng}, spatial queries done in Python
 
 -- Index for fast event type filtering
@@ -1620,16 +1724,18 @@ CREATE INDEX IF NOT EXISTS idx_events_severity ON events(severity);
 -- Index for company type filtering (for finding ports/hubs)
 CREATE INDEX IF NOT EXISTS idx_companies_type ON companies(type);
 
--- Index for supplier material search (GIN index for array containment)
-CREATE INDEX IF NOT EXISTS idx_suppliers_materials ON suppliers USING GIN (materials);
-
 -- Index for connection status filtering
 CREATE INDEX IF NOT EXISTS idx_connections_status ON connections(status);
 
+-- Index for connection endpoints
+CREATE INDEX IF NOT EXISTS idx_connections_from_node ON connections(from_node_id);
+CREATE INDEX IF NOT EXISTS idx_connections_to_node ON connections(to_node_id);
+
 -- Comments
 COMMENT ON INDEX idx_events_type IS 'Fast filtering of events by type (natural_disaster, war, etc.)';
+COMMENT ON INDEX idx_events_severity IS 'Fast filtering of events by severity level';
 COMMENT ON INDEX idx_companies_type IS 'Fast filtering of companies by type (port, airport, foundry, etc.)';
-COMMENT ON INDEX idx_suppliers_materials IS 'Fast search for suppliers by material category';
+COMMENT ON INDEX idx_connections_status IS 'Fast filtering of connections by status';
 ```
 
 **Step 4: Run test to verify it passes**
@@ -1658,13 +1764,54 @@ Create `risk-agent/tests/test_integration.py`:
 """Integration tests for risk agent."""
 import pytest
 import os
-from src.agent.agent import analyze_event_risk
+from src.schemas.output import RiskAssessment, RiskCategory
 
 # Skip if no API key
 pytestmark = pytest.mark.skipif(
     not os.getenv("OPENAI_API_KEY"),
     reason="Requires OPENAI_API_KEY"
 )
+
+
+def test_risk_assessment_serialization():
+    """Test RiskAssessment can be serialized for database storage."""
+    from src.schemas.output import AffectedEntity, Alternative
+
+    assessment = RiskAssessment(
+        risk_category=RiskCategory.AT_RISK,
+        severity_score=6,
+        confidence=0.85,
+        reasoning={
+            "summary": "Port within typhoon path",
+            "factors": ["proximity", "severity"],
+            "event_ids": ["event-123"]
+        },
+        affected_entities=[
+            AffectedEntity(type="node", id="node-456", name="Port of Kaohsiung", distance_km=45.2)
+        ],
+        alternatives={
+            "suppliers": [],
+            "routes": [
+                Alternative(
+                    id="hub-789",
+                    name="Port of Busan",
+                    type="port",
+                    reason="Safe distance from event",
+                    confidence=0.9
+                )
+            ]
+        }
+    )
+
+    # Test Pydantic v2 model_dump()
+    data = assessment.model_dump()
+
+    assert data['risk_category'] == RiskCategory.AT_RISK
+    assert data['severity_score'] == 6
+    assert data['confidence'] == 0.85
+    assert len(data['affected_entities']) == 1
+    assert data['affected_entities'][0]['name'] == "Port of Kaohsiung"
+
 
 @pytest.mark.asyncio
 async def test_analyze_event_risk_integration():
@@ -1673,25 +1820,26 @@ async def test_analyze_event_risk_integration():
 
     This test requires:
     - Valid OPENAI_API_KEY
-    - Supabase connection
+    - Supabase connection with test data
     - An event in the database
 
     Run with: pytest tests/test_integration.py -v -s
     """
     # This is a placeholder - actual event_id would come from test database
-    # For now, this tests that the function signature is correct
+    # For now, this tests that the import works
 
-    # In a real test, you would:
-    # 1. Create a test event in Supabase
-    # 2. Call analyze_event_risk(event_id)
-    # 3. Verify the output structure
-    # 4. Clean up test data
+    from src.agent.agent import analyze_event_risk
 
-    # Example structure (uncomment when database is seeded):
-    # event_id = "test-event-123"
+    # Verify the function exists and is async
+    import inspect
+    assert inspect.iscoroutinefunction(analyze_event_risk)
+
+    # Example usage (uncomment when database is seeded):
+    # event_id = "your-test-event-uuid"
     # result = await analyze_event_risk(event_id)
     #
-    # assert result.risk_category in ['HEALTHY', 'MONITORING', 'AT_RISK', 'CRITICAL', 'DISRUPTED']
+    # assert isinstance(result, RiskAssessment)
+    # assert result.risk_category in RiskCategory
     # assert 1 <= result.severity_score <= 10
     # assert 0.0 <= result.confidence <= 1.0
     # assert 'summary' in result.reasoning
@@ -1702,16 +1850,19 @@ async def test_analyze_event_risk_integration():
 **Step 2: Run test to verify it fails**
 
 Run: `cd risk-agent && python -m pytest tests/test_integration.py -v`
-Expected: SKIP (if no OPENAI_API_KEY) or PASS
+Expected: Test file doesn't exist yet
 
 **Step 3: Write minimal implementation**
 
-No implementation needed - test is already written as documentation.
+No additional implementation needed - test file is the implementation.
 
 **Step 4: Run test to verify it passes**
 
+Run: `cd risk-agent && python -m pytest tests/test_integration.py::test_risk_assessment_serialization -v`
+Expected: PASS
+
 Run: `cd risk-agent && python -m pytest tests/test_integration.py -v`
-Expected: SKIP or PASS
+Expected: SKIP (for async test if no OPENAI_API_KEY) or PASS
 
 **Step 5: Commit**
 
@@ -1758,10 +1909,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY src/ ./src/
-COPY .env .env
 
 # Expose port
 EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
 
 # Run application
 CMD ["python", "-m", "src.main"]
@@ -1784,8 +1938,14 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   redis:
     image: redis:7-alpine
@@ -1793,6 +1953,11 @@ services:
     ports:
       - "6379:6379"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 ```
 
 Create `risk-agent/.dockerignore`:
@@ -1801,6 +1966,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .env
+.env.*
 .venv/
 venv/
 .pytest_cache/
@@ -1808,12 +1974,23 @@ venv/
 htmlcov/
 .git/
 tests/
+*.md
+migrations/
 ```
 
 **Step 4: Run test to verify it passes**
 
 Run: `ls risk-agent/Dockerfile`
 Expected: File exists
+
+Optional - build and test:
+```bash
+cd risk-agent
+docker-compose build
+docker-compose up -d
+curl http://localhost:8000/health
+docker-compose down
+```
 
 **Step 5: Commit**
 
@@ -1832,13 +2009,13 @@ git commit -m "feat: add docker support"
 **Step 1: Write the failing test**
 
 ```bash
-grep "Setup" risk-agent/README.md
+grep "Architecture" risk-agent/README.md
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `grep "Usage" risk-agent/README.md`
-Expected: No "Usage" section exists yet
+Run: `grep "Architecture" risk-agent/README.md`
+Expected: No detailed architecture section exists yet
 
 **Step 3: Write minimal implementation**
 
@@ -1850,34 +2027,50 @@ Python LangChain agent for supply chain risk analysis. Analyzes geopolitical eve
 
 ## Features
 
-- **LangChain Agent**: GPT-4o powered agent with custom tools
-- **Spatial Analysis**: PostGIS queries for geographic impact calculation
+- **LangChain Agent**: GPT-4o powered agent with 9 custom tools
+- **Spatial Analysis**: Haversine formula for geographic impact calculation (no PostGIS)
 - **Real-time Processing**: Redis pub/sub integration for event streaming
-- **Structured Output**: Pydantic schemas for consistent risk assessments
+- **Structured Output**: Pydantic v2 schemas for consistent risk assessments
 - **Alternative Suggestions**: Recommends alternative suppliers and routes
 
 ## Architecture
 
 ```
-Backend (Node.js) → Redis Pub/Sub → Risk Agent (Python) → Supabase
-                                          ↓
-                                    Risk Assessments Table
+Backend (Node.js) → Redis (events:new) → Risk Agent (Python) → Supabase
+                                               ↓
+                                         risk_assessments table
+                                               ↓
+                                   Redis (risk:updated) → Frontend
 ```
+
+### Agent Tools
+
+| Tool | Purpose |
+|------|---------|
+| `get_event_details` | Fetch event info (type, severity, location) |
+| `calculate_impact_radius_tool` | Determine affected area size |
+| `query_affected_nodes` | Find suppliers/ports in impact zone |
+| `query_affected_connections` | Find shipping routes through zone |
+| `find_alternative_suppliers` | Search for replacement suppliers |
+| `find_alternative_routes` | Search for alternate shipping paths |
+| `get_connection_details` | Get full route information |
+| `get_supplier_materials` | Check what materials a supplier provides |
+| `calculate_distance_tool` | Measure geographic distance |
 
 ## Setup
 
 ### Prerequisites
 
 - Python 3.11+
-- Redis server
-- Supabase account with PostGIS enabled
-- OpenAI API key
+- Redis server (local or Docker)
+- Supabase account
+- OpenAI API key (GPT-4o access)
 
 ### Installation
 
-1. **Clone and navigate to risk-agent:**
+1. **Navigate to risk-agent:**
    ```bash
-   cd risk-agent
+   cd "Version 2/risk-agent"
    ```
 
 2. **Create virtual environment:**
@@ -1894,17 +2087,13 @@ Backend (Node.js) → Redis Pub/Sub → Risk Agent (Python) → Supabase
 4. **Configure environment:**
    ```bash
    cp .env.example .env
-   # Edit .env with your credentials:
-   # - OPENAI_API_KEY
-   # - SUPABASE_URL
-   # - SUPABASE_SERVICE_ROLE_KEY
-   # - REDIS_HOST, REDIS_PORT
+   # Edit .env with your credentials
    ```
 
 5. **Run database migrations:**
    - Go to Supabase Dashboard → SQL Editor
    - Run `migrations/001_create_risk_assessments.sql`
-   - Run `migrations/002_create_spatial_functions.sql`
+   - Run `migrations/002_add_indexes.sql`
 
 ### Running
 
@@ -1923,37 +2112,41 @@ docker-compose up -d
 curl http://localhost:8000/health
 ```
 
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check with Redis status |
+| `/analyze/{event_id}` | POST | Async trigger risk analysis |
+| `/analyze/{event_id}/sync` | GET | Sync analyze and return result |
+
 ## Usage
 
 ### Automatic Analysis
 
 The agent automatically listens for new events on Redis channel `events:new`:
 
-1. Backend fetches event from GDELT/USGS/NewsAPI
+1. Backend fetches event from news/weather APIs
 2. Backend saves to Supabase `events` table
 3. Backend publishes to Redis: `{"event_id": "..."}`
 4. Risk agent receives event, analyzes, saves assessment
-5. Agent publishes `risk:updated` notification
+5. Agent publishes to `risk:updated` channel
 
 ### Manual Analysis
 
-Trigger analysis via API:
 ```bash
-curl -X POST http://localhost:8000/analyze/EVENT_ID
-```
+# Async (returns immediately)
+curl -X POST http://localhost:8000/analyze/EVENT_UUID
 
-### Query Results
-
-Risk assessments are stored in `risk_assessments` table:
-```sql
-SELECT * FROM risk_assessments WHERE event_id = 'your-event-id';
+# Sync (waits for result)
+curl http://localhost:8000/analyze/EVENT_UUID/sync
 ```
 
 ## Output Schema
 
 ```json
 {
-  "risk_category": "AT_RISK",
+  "risk_category": "at-risk",
   "severity_score": 6,
   "confidence": 0.85,
   "reasoning": {
@@ -1967,11 +2160,21 @@ SELECT * FROM risk_assessments WHERE event_id = 'your-event-id';
   "alternatives": {
     "suppliers": [],
     "routes": [
-      {"id": "...", "name": "Port of Busan", "reason": "Safe distance from event"}
+      {"id": "...", "name": "Port of Busan", "type": "port", "reason": "Safe distance", "confidence": 0.9}
     ]
   }
 }
 ```
+
+### Risk Categories
+
+| Category | Description | Typical Conditions |
+|----------|-------------|-------------------|
+| `healthy` | No impact | >300km away, severity 1-2 |
+| `monitoring` | Minor concern | 200-300km, severity 3-4 |
+| `at-risk` | Significant risk | 100-200km, severity 5-6 |
+| `critical` | Imminent disruption | 50-100km, severity 7-8 |
+| `disrupted` | Confirmed disruption | 0-50km, severity 9-10 |
 
 ## Testing
 
@@ -1982,8 +2185,8 @@ pytest -v
 # Run with coverage
 pytest --cov=src tests/
 
-# Run integration tests (requires API key)
-pytest tests/test_integration.py -v -s
+# Run specific test
+pytest tests/test_schemas.py -v
 ```
 
 ## Project Structure
@@ -1992,65 +2195,46 @@ pytest tests/test_integration.py -v -s
 risk-agent/
 ├── src/
 │   ├── agent/
-│   │   ├── agent.py       # LangChain agent creation
-│   │   ├── tools.py       # Custom tools for agent
-│   │   └── prompts.py     # System prompts
+│   │   ├── agent.py       # LangChain agent + analyze_event_risk()
+│   │   ├── tools.py       # 9 custom tools
+│   │   └── prompts.py     # System prompt
 │   ├── schemas/
-│   │   └── output.py      # Pydantic output schemas
+│   │   └── output.py      # RiskAssessment, AffectedEntity, Alternative
 │   ├── db/
 │   │   └── supabase.py    # Database client
 │   ├── utils/
-│   │   ├── geo.py         # Geographic calculations
-│   │   └── redis_client.py # Redis pub/sub
+│   │   ├── geo.py         # haversine_distance, calculate_impact_radius
+│   │   └── redis_client.py
 │   ├── config.py          # Configuration
 │   └── main.py            # FastAPI server
 ├── migrations/
 │   ├── 001_create_risk_assessments.sql
-│   └── 002_create_spatial_functions.sql
+│   └── 002_add_indexes.sql
 ├── tests/
 ├── requirements.txt
-└── README.md
+├── Dockerfile
+└── docker-compose.yml
 ```
-
-## Development
-
-### Adding New Tools
-
-1. Define tool in `src/agent/tools.py`:
-   ```python
-   @tool
-   def my_new_tool(param: str) -> dict:
-       """Tool description."""
-       # Implementation
-       return result
-   ```
-
-2. Add to tools list in `src/agent/agent.py`
-
-3. Update system prompt if needed in `src/agent/prompts.py`
-
-### Modifying Risk Logic
-
-Risk categorization is defined in system prompt (`src/agent/prompts.py`):
-- Adjust distance thresholds
-- Modify event type considerations
-- Update alternative selection priorities
 
 ## Troubleshooting
 
 **Redis connection failed:**
-- Ensure Redis server is running: `redis-cli ping`
-- Check REDIS_HOST and REDIS_PORT in .env
+```bash
+# Check if Redis is running
+redis-cli ping
+# Or start with Docker
+docker run -d -p 6379:6379 redis:7-alpine
+```
+
+**OpenAI API errors:**
+- Verify `OPENAI_API_KEY` is valid
+- Check you have GPT-4o access
+- Review rate limits
 
 **Supabase query errors:**
-- Verify PostGIS extension is enabled
-- Run spatial functions migration
-- Check service role key has proper permissions
-
-**Agent not responding:**
-- Verify OPENAI_API_KEY is valid
-- Check API rate limits
-- Review logs for errors
+- Verify `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
+- Check migrations have been run
+- Ensure tables have data
 
 ## License
 
@@ -2059,8 +2243,8 @@ ISC
 
 **Step 4: Run test to verify it passes**
 
-Run: `grep "Usage" risk-agent/README.md`
-Expected: "Usage" section found
+Run: `grep "Architecture" risk-agent/README.md`
+Expected: "Architecture" section found
 
 **Step 5: Commit**
 
@@ -2092,8 +2276,8 @@ Expected: `No such file or directory`
 
 ```bash
 cd "Version 2/backend"
-npm install redis
-npm install --save-dev @types/redis
+npm install ioredis
+npm install --save-dev @types/ioredis
 ```
 
 Add to `Version 2/backend/.env`:

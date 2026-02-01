@@ -8,7 +8,11 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "format": "prettier --write src/",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:risk": "playwright test tests/e2e/risk-"
   },
   "dependencies": {
     "@deck.gl/core": "^9.2.6",
@@ -25,6 +29,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.58.1",
     "@types/mapbox-gl": "^3.4.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
