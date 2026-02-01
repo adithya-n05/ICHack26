@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sentinel Zero — Gridline Operations</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&family=Saira+Condensed:wght@300;400;600&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b0c0e;
+        --bg-2: #111317;
+        --bg-3: #161a20;
+        --line: #1e242c;
+        --line-strong: #2b3440;
+        --text: #e5e7eb;
+        --muted: #99a1ad;
+        --accent: #29f2ff;
+        --accent-dim: rgba(41, 242, 255, 0.2);
+        --warning: #ffcc00;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Saira Condensed", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: 56px 1fr 44px;
+        background:
+          linear-gradient(180deg, rgba(10, 12, 14, 0.96), rgba(10, 12, 14, 0.94)),
+          radial-gradient(1200px 500px at 65% 40%, rgba(41, 242, 255, 0.06), transparent 60%),
+          var(--bg);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .shell::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+        background-size: 24px 24px;
+        opacity: 0.35;
+        pointer-events: none;
+      }
+
+      .shell::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+          0deg,
+          rgba(255, 255, 255, 0.015),
+          rgba(255, 255, 255, 0.015) 1px,
+          transparent 1px,
+          transparent 3px
+        );
+        mix-blend-mode: screen;
+        opacity: 0.22;
+        pointer-events: none;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(13, 16, 20, 0.9);
+        position: relative;
+        z-index: 2;
+      }
+
+      .title {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        font-family: "Oxanium", sans-serif;
+        letter-spacing: 0.12em;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+      }
+
+      .title .chip {
+        border: 1px solid var(--accent);
+        padding: 4px 8px;
+        border-radius: 2px;
+        color: var(--accent);
+        font-size: 0.7rem;
+      }
+
+      .status-bar {
+        display: flex;
+        gap: 16px;
+        font-family: "Share Tech Mono", monospace;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .status-dot {
+        color: var(--accent);
+      }
+
+      .main {
+        display: grid;
+        grid-template-columns: 280px 1fr 320px;
+        gap: 16px;
+        padding: 16px;
+        position: relative;
+        z-index: 1;
+      }
+
+      .panel {
+        background: rgba(12, 14, 18, 0.86);
+        border: 1px solid var(--line);
+        padding: 14px 14px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .panel h3 {
+        font-family: "Oxanium", sans-serif;
+        letter-spacing: 0.08em;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin: 0;
+      }
+
+      .panel .section {
+        border-top: 1px solid var(--line);
+        padding-top: 10px;
+      }
+
+      .panel .label {
+        font-size: 0.7rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+
+      .panel .value {
+        font-size: 0.95rem;
+        margin-top: 4px;
+      }
+
+      .list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .list .item {
+        border: 1px solid var(--line);
+        padding: 8px;
+        background: var(--bg-2);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .map-frame {
+        position: relative;
+        border: 1px solid var(--line-strong);
+        background: radial-gradient(800px 400px at 50% 60%, rgba(41, 242, 255, 0.08), transparent 60%),
+          var(--bg-3);
+        overflow: hidden;
+      }
+
+      .map-header {
+        position: absolute;
+        top: 10px;
+        left: 12px;
+        font-size: 0.75rem;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        text-transform: uppercase;
+        z-index: 2;
+      }
+
+      .map-overlay {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(41, 242, 255, 0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(41, 242, 255, 0.08) 1px, transparent 1px);
+        background-size: 48px 48px;
+        opacity: 0.35;
+        pointer-events: none;
+      }
+
+      .map-svg {
+        width: 100%;
+        height: 100%;
+      }
+
+      .ticker {
+        border-top: 1px solid var(--line);
+        background: rgba(12, 14, 18, 0.9);
+        font-family: "Share Tech Mono", monospace;
+        font-size: 0.75rem;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 16px;
+      }
+
+      .ticker span {
+        color: var(--accent);
+      }
+
+      .pill {
+        border: 1px solid var(--line-strong);
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <div class="title">
+          <div class="chip">SZ-OPS</div>
+          Sentinel Zero Command Grid
+        </div>
+        <div class="status-bar">
+          <div><span class="status-dot">●</span> LIVE FEED</div>
+          <div>UTC 14:26:19</div>
+          <div>RISK INDEX: 0.62</div>
+        </div>
+      </header>
+
+      <main class="main">
+        <section class="panel">
+          <h3>Layer Control</h3>
+          <div class="section list">
+            <div class="item"><span>Heatmaps</span><span class="pill">ON</span></div>
+            <div class="item"><span>Connections</span><span class="pill">ON</span></div>
+            <div class="item"><span>Nodes</span><span class="pill">ON</span></div>
+            <div class="item"><span>Tariffs</span><span class="pill">OFF</span></div>
+          </div>
+          <div class="section">
+            <div class="label">Filter</div>
+            <div class="value">GDELT + USGS + NOAA</div>
+          </div>
+          <div class="section">
+            <div class="label">Priority</div>
+            <div class="value">Semiconductors / Asia-Pacific</div>
+          </div>
+        </section>
+
+        <section class="map-frame">
+          <div class="map-header">Global Supply Chain Theater</div>
+          <svg class="map-svg" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice">
+            <defs>
+              <radialGradient id="glow" cx="50%" cy="55%" r="60%">
+                <stop offset="0%" stop-color="rgba(41, 242, 255, 0.2)" />
+                <stop offset="60%" stop-color="rgba(41, 242, 255, 0)" />
+              </radialGradient>
+            </defs>
+            <circle cx="600" cy="360" r="260" fill="url(#glow)" />
+            <circle cx="600" cy="360" r="200" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1" />
+            <circle cx="600" cy="360" r="140" fill="none" stroke="rgba(41,242,255,0.3)" stroke-width="1" />
+            <path d="M420 360 Q600 180 780 360" stroke="rgba(224,224,224,0.7)" stroke-width="2" fill="none" />
+            <path d="M510 410 Q620 300 740 420" stroke="rgba(255,204,0,0.8)" stroke-width="2" fill="none" />
+            <circle cx="520" cy="410" r="6" fill="#29f2ff" />
+            <circle cx="720" cy="420" r="6" fill="#29f2ff" />
+            <circle cx="600" cy="300" r="4" fill="#ff6600" />
+          </svg>
+          <div class="map-overlay"></div>
+        </section>
+
+        <section class="panel">
+          <h3>Route Brief</h3>
+          <div class="section">
+            <div class="label">Route</div>
+            <div class="value">TSMC → ASML → Rotterdam</div>
+          </div>
+          <div class="section">
+            <div class="label">Status</div>
+            <div class="value" style="color: var(--warning)">Monitoring</div>
+          </div>
+          <div class="section">
+            <div class="label">Active Events</div>
+            <div class="value">3 alerts within 320km</div>
+          </div>
+          <div class="section list">
+            <div class="item"><span>Typhoon Watch</span><span class="pill">NOAA</span></div>
+            <div class="item"><span>Port Strike</span><span class="pill">GDELT</span></div>
+            <div class="item"><span>Trade Review</span><span class="pill">Policy</span></div>
+          </div>
+        </section>
+      </main>
+
+      <div class="ticker">
+        <span>⚡</span> LIVE: Port of Busan delays +18h | EUV shipment tracking active | GDELT: labor strike escalates
+      </div>
+    </div>
+  </body>
+</html>

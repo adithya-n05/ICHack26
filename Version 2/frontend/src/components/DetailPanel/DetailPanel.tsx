@@ -35,9 +35,25 @@ interface PathEdge {
   materials?: string[];
 }
 
+interface Event {
+  id: string;
+  type: string;
+  title: string;
+  description?: string;
+  location?: { lat: number; lng: number };
+  lat?: number | null;
+  lng?: number | null;
+  severity: number;
+  startDate?: string;
+  endDate?: string;
+  source?: string;
+  polygon?: Array<{ lat: number; lng: number }>;
+}
+
 interface DetailPanelProps {
   selectedNode: Company | null;
   selectedConnection: Connection | null;
+  selectedEvent?: Event | null;
   onClose: () => void;
   alternativeSuppliers?: Company[];
   riskyPathEdge?: PathEdge | null;
@@ -66,9 +82,25 @@ const formatRevenue = (revenue?: number) => {
   return `$${revenue.toLocaleString()}`;
 };
 
+const formatEventType = (value?: string) => {
+  if (!value) return 'Unknown';
+  return value
+    .split('_')
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
+};
+
+const formatEventDate = (value?: string) => {
+  if (!value) return 'Unknown';
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return value;
+  return new Date(parsed).toLocaleDateString();
+};
+
 export function DetailPanel({
   selectedNode,
   selectedConnection,
+  selectedEvent = null,
   onClose,
   alternativeSuppliers = [],
   riskyPathEdge = null,
@@ -174,6 +206,115 @@ export function DetailPanel({
           <div className="mt-4 px-3 py-2 bg-accent-cyan/20 border border-accent-cyan rounded">
             <span className="text-accent-cyan text-xs font-mono">YOUR SUPPLY CHAIN</span>
           </div>
+        )}
+      </aside>
+    );
+  }
+
+  if (selectedEvent) {
+    const eventLocation =
+      selectedEvent.location ??
+      (typeof selectedEvent.lat === 'number' && typeof selectedEvent.lng === 'number'
+        ? { lat: selectedEvent.lat, lng: selectedEvent.lng }
+        : null);
+
+    return (
+      <aside
+        data-testid="detail-panel"
+        className="absolute right-0 top-0 w-[350px] h-full bg-bg-secondary border-l border-border-color p-4 overflow-y-auto"
+      >
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-accent-cyan font-mono text-lg font-bold">Event Detail</h2>
+          <button
+            data-testid="detail-panel-close"
+            onClick={onClose}
+            className="text-text-secondary hover:text-text-primary text-xl"
+          >
+            ×
+          </button>
+        </div>
+
+        <section className="mb-4">
+          <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+            Title
+          </h3>
+          <p className="text-text-primary text-sm font-semibold">{selectedEvent.title}</p>
+        </section>
+
+        <section className="mb-4">
+          <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+            Event ID
+          </h3>
+          <p className="text-text-primary text-xs font-mono break-all">{selectedEvent.id}</p>
+        </section>
+
+        <section className="mb-4 grid grid-cols-2 gap-4">
+          <div>
+            <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+              Type
+            </h3>
+            <span className="inline-block px-2 py-1 bg-bg-tertiary text-accent-cyan text-xs font-mono rounded">
+              {formatEventType(selectedEvent.type)}
+            </span>
+          </div>
+          <div>
+            <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+              Severity
+            </h3>
+            <div className="text-text-primary text-sm font-mono">{selectedEvent.severity}</div>
+          </div>
+        </section>
+
+        <section className="mb-4">
+          <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+            Start Date
+          </h3>
+          <p className="text-text-primary text-sm font-mono">
+            {formatEventDate(selectedEvent.startDate)}
+          </p>
+        </section>
+
+        <section className="mb-4">
+          <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+            Last Event
+          </h3>
+          <p className="text-text-primary text-sm font-mono">
+            {formatEventDate(selectedEvent.endDate ?? selectedEvent.startDate)}
+          </p>
+        </section>
+
+        <section className="mb-4">
+          <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+            Source
+          </h3>
+          <p className="text-text-primary text-sm">{selectedEvent.source || 'N/A'}</p>
+        </section>
+
+        <section className="mb-4">
+          <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+            Location
+          </h3>
+          {eventLocation ? (
+            <p className="text-text-primary text-sm">
+              {eventLocation.lat.toFixed(4)}, {eventLocation.lng.toFixed(4)}
+            </p>
+          ) : (
+            <p className="text-text-primary text-sm">N/A</p>
+          )}
+          {selectedEvent.polygon && selectedEvent.polygon.length > 0 && (
+            <p className="text-text-secondary text-xs mt-1">
+              Polygon points: {selectedEvent.polygon.length}
+            </p>
+          )}
+        </section>
+
+        {selectedEvent.description && (
+          <section className="mb-4">
+            <h3 className="text-text-secondary text-xs font-mono mb-2 uppercase tracking-wider">
+              Description
+            </h3>
+            <p className="text-text-primary text-sm leading-relaxed">{selectedEvent.description}</p>
+          </section>
         )}
       </aside>
     );
