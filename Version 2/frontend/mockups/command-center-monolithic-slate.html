@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sentinel Zero — Monolithic Slate</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;700&family=Saira+Condensed:wght@300;500;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0c0d0f;
+        --slate: #15181d;
+        --slate-2: #1a1f26;
+        --edge: #232a33;
+        --text: #e0e3e8;
+        --muted: #8a929e;
+        --accent: #2ef0f7;
+        --alert: #ff3300;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Saira Condensed", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: 64px 1fr 56px;
+        gap: 12px;
+        padding: 12px;
+      }
+
+      header {
+        border: 1px solid var(--edge);
+        background: var(--slate);
+        padding: 12px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .brand {
+        font-family: "Oxanium", sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        font-size: 0.95rem;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .brand .badge {
+        background: var(--slate-2);
+        border: 1px solid var(--edge);
+        padding: 6px 10px;
+        color: var(--accent);
+        font-size: 0.7rem;
+      }
+
+      .header-right {
+        display: flex;
+        gap: 16px;
+        font-family: "Share Tech Mono", monospace;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 300px 1fr 300px;
+        gap: 12px;
+      }
+
+      .panel {
+        background: var(--slate);
+        border: 1px solid var(--edge);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .panel h3 {
+        margin: 0;
+        font-family: "Oxanium", sans-serif;
+        font-size: 0.75rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid var(--edge);
+        padding: 8px 10px;
+        background: var(--slate-2);
+      }
+
+      .map {
+        border: 1px solid var(--edge);
+        background: radial-gradient(700px 400px at 50% 60%, rgba(46, 240, 247, 0.1), transparent 65%),
+          var(--slate);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .map::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(12, 13, 15, 0.0), rgba(12, 13, 15, 0.5));
+        pointer-events: none;
+      }
+
+      .map svg {
+        width: 100%;
+        height: 100%;
+      }
+
+      .ticker {
+        border: 1px solid var(--edge);
+        background: var(--slate);
+        display: flex;
+        align-items: center;
+        padding: 0 18px;
+        font-family: "Share Tech Mono", monospace;
+        font-size: 0.78rem;
+        color: var(--muted);
+      }
+
+      .ticker strong {
+        color: var(--accent);
+        margin-right: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <div class="brand">
+          <span class="badge">SZ/OPS</span>
+          Sentinel Zero Operations Slate
+        </div>
+        <div class="header-right">
+          <div>CONDITION: <span style="color: var(--alert)">ELEVATED</span></div>
+          <div>UTC 14:29:02</div>
+        </div>
+      </header>
+
+      <section class="layout">
+        <div class="panel">
+          <h3>Layers</h3>
+          <div class="row"><span>Heatmaps</span><span>ON</span></div>
+          <div class="row"><span>Routes</span><span>ON</span></div>
+          <div class="row"><span>Nodes</span><span>ON</span></div>
+          <div class="row"><span>Tariff Overlay</span><span>OFF</span></div>
+          <h3>Focus</h3>
+          <div class="row"><span>Region</span><span>APAC</span></div>
+          <div class="row"><span>Sector</span><span>Semiconductors</span></div>
+        </div>
+
+        <div class="map">
+          <svg viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice">
+            <circle cx="600" cy="360" r="230" fill="rgba(46,240,247,0.08)" />
+            <circle cx="600" cy="360" r="170" fill="none" stroke="rgba(255,255,255,0.1)" />
+            <path d="M430 380 Q600 260 770 390" stroke="rgba(46,240,247,0.7)" stroke-width="2" fill="none" />
+            <path d="M480 430 Q620 340 720 460" stroke="rgba(255,102,0,0.7)" stroke-width="2" fill="none" />
+            <circle cx="500" cy="430" r="6" fill="#2ef0f7" />
+            <circle cx="700" cy="460" r="6" fill="#2ef0f7" />
+          </svg>
+        </div>
+
+        <div class="panel">
+          <h3>Situation</h3>
+          <div class="row"><span>Active Alerts</span><span>5</span></div>
+          <div class="row"><span>Critical Routes</span><span>2</span></div>
+          <h3>Route</h3>
+          <div class="row"><span>TSMC → Nvidia</span><span>SEA</span></div>
+          <div class="row"><span>Status</span><span style="color: var(--alert)">At-Risk</span></div>
+          <div class="row"><span>ETA Shift</span><span>+2.4 days</span></div>
+        </div>
+      </section>
+
+      <footer class="ticker">
+        <strong>LIVE</strong> Routing anomaly detected near Busan | GDELT: port labor negotiations stalled | NOAA: Typhoon track updated
+      </footer>
+    </div>
+  </body>
+</html>

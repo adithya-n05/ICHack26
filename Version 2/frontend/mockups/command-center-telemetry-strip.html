@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sentinel Zero — Telemetry Strip</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;700&family=Rajdhani:wght@400;600&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0a0b0d;
+        --band: #11151a;
+        --panel: #151a21;
+        --edge: #1f2731;
+        --text: #e2e6ec;
+        --muted: #9aa3b0;
+        --accent: #27f0ff;
+        --accent-2: #a3ff4f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Rajdhani", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: 56px 1fr 52px;
+      }
+
+      .band {
+        background: var(--band);
+        border-bottom: 1px solid var(--edge);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        font-family: "Oxanium", sans-serif;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .band .right {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 0.75rem;
+        color: var(--muted);
+        display: flex;
+        gap: 18px;
+      }
+
+      .content {
+        display: grid;
+        grid-template-columns: 220px 1fr 220px;
+        gap: 12px;
+        padding: 12px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--edge);
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .panel h4 {
+        margin: 0;
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      .panel .entry {
+        display: flex;
+        justify-content: space-between;
+        border: 1px solid var(--edge);
+        padding: 6px 8px;
+        background: #11161d;
+      }
+
+      .map {
+        border: 1px solid var(--edge);
+        background: radial-gradient(700px 400px at 50% 55%, rgba(39, 240, 255, 0.12), transparent 70%),
+          #10141b;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .map::before {
+        content: "";
+        position: absolute;
+        inset: 12px;
+        border: 1px dashed rgba(39, 240, 255, 0.2);
+        pointer-events: none;
+      }
+
+      .map svg {
+        width: 100%;
+        height: 100%;
+      }
+
+      .ticker {
+        background: var(--band);
+        border-top: 1px solid var(--edge);
+        font-family: "Share Tech Mono", monospace;
+        font-size: 0.75rem;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 12px;
+      }
+
+      .ticker .pulse {
+        color: var(--accent-2);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="band">
+        <div>Sentinel Zero / Telemetry Strip</div>
+        <div class="right">
+          <div>FEED: LIVE</div>
+          <div>UTC 14:31:43</div>
+          <div>ALERTS: 6</div>
+        </div>
+      </header>
+
+      <main class="content">
+        <aside class="panel">
+          <h4>Layers</h4>
+          <div class="entry"><span>Heatmaps</span><span>ON</span></div>
+          <div class="entry"><span>Connections</span><span>ON</span></div>
+          <div class="entry"><span>Nodes</span><span>ON</span></div>
+          <h4>Filters</h4>
+          <div class="entry"><span>GDELT</span><span>ON</span></div>
+          <div class="entry"><span>USGS</span><span>ON</span></div>
+          <div class="entry"><span>NOAA</span><span>ON</span></div>
+        </aside>
+
+        <section class="map">
+          <svg viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice">
+            <circle cx="600" cy="360" r="220" fill="rgba(39, 240, 255, 0.12)" />
+            <path d="M420 360 Q600 240 780 360" stroke="rgba(39,240,255,0.9)" stroke-width="2" fill="none" />
+            <path d="M520 440 Q620 330 740 460" stroke="rgba(255,204,0,0.7)" stroke-width="2" fill="none" />
+            <circle cx="520" cy="440" r="6" fill="#27f0ff" />
+            <circle cx="720" cy="460" r="6" fill="#27f0ff" />
+            <circle cx="610" cy="330" r="4" fill="#a3ff4f" />
+          </svg>
+        </section>
+
+        <aside class="panel">
+          <h4>Telemetry</h4>
+          <div class="entry"><span>Risk Index</span><span>0.58</span></div>
+          <div class="entry"><span>Latency</span><span>148ms</span></div>
+          <div class="entry"><span>Live Feeds</span><span>4/4</span></div>
+          <h4>Selected Route</h4>
+          <div class="entry"><span>TSMC → AMD</span><span>SEA</span></div>
+          <div class="entry"><span>Status</span><span>Monitoring</span></div>
+        </aside>
+      </main>
+
+      <footer class="ticker">
+        <span class="pulse">⚡</span> TELEMETRY: GDELT alert cluster forming near Taiwan Strait | NOAA: wind shear rising | USGS: M5.1 event detected
+      </footer>
+    </div>
+  </body>
+</html>

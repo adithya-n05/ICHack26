@@ -72,9 +72,25 @@ interface NewsItem {
   category?: string;
 }
 
+interface Event {
+  id: string;
+  type: string;
+  title: string;
+  description?: string;
+  location?: { lat: number; lng: number };
+  lat?: number | null;
+  lng?: number | null;
+  severity: number;
+  startDate?: string;
+  endDate?: string;
+  source?: string;
+  polygon?: Array<{ lat: number; lng: number }>;
+}
+
 function App() {
   const [selectedNode, setSelectedNode] = useState<Company | null>(null);
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [mapRefreshKey, setMapRefreshKey] = useState(0);
@@ -202,6 +218,7 @@ function App() {
     }
     console.log('Node clicked:', node.name);
     setSelectedConnection(null);
+    setSelectedEvent(null);
     setSelectedNode(normalizedNode);
   };
 
@@ -210,6 +227,7 @@ function App() {
     const toNode = connection.toNode ? normalizeCompany(connection.toNode) ?? undefined : undefined;
     console.log('Connection clicked:', connection.id);
     setSelectedNode(null);
+    setSelectedEvent(null);
     setSelectedConnection({
       ...connection,
       fromNode,
@@ -217,9 +235,17 @@ function App() {
     });
   };
 
+  const handleEventClick = (event: Event) => {
+    console.log('Event clicked:', event.title);
+    setSelectedNode(null);
+    setSelectedConnection(null);
+    setSelectedEvent(event);
+  };
+
   const handleClosePanel = () => {
     setSelectedNode(null);
     setSelectedConnection(null);
+    setSelectedEvent(null);
   };
 
   const handleSupplierFormSuccess = () => {
@@ -247,12 +273,14 @@ function App() {
           key={mapRefreshKey}
           onNodeClick={handleNodeClick}
           onConnectionClick={handleConnectionClick}
+          onEventClick={handleEventClick}
           pathEdges={pathEdges as PathEdge[]}
           alternativeSuppliers={effectiveAlternativeSuppliers}
         />
         <DetailPanel
           selectedNode={selectedNode}
           selectedConnection={selectedConnection}
+          selectedEvent={selectedEvent}
           onClose={handleClosePanel}
           alternativeSuppliers={effectiveAlternativeSuppliers}
           riskyPathEdge={effectiveRiskyPathEdge}

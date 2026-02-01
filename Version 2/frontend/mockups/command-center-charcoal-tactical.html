@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sentinel Zero — Charcoal Tactical</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=IBM+Plex+Sans+Condensed:wght@300;400;600&family=IBM+Plex+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0a0b0d;
+        --charcoal: #121418;
+        --slate: #171b21;
+        --panel: #1b2027;
+        --edge: #2a313a;
+        --edge-strong: #38414d;
+        --text: #d6d9de;
+        --muted: #8a919b;
+        --danger: #ff3b30;
+        --warn: #ffb000;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans Condensed", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: 60px 1fr 48px;
+        background: linear-gradient(180deg, #0a0b0d, #0a0b0d 40%, #0c0e12);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .shell::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+        background-size: 32px 32px;
+        opacity: 0.25;
+        pointer-events: none;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--edge);
+        background: rgba(14, 16, 20, 0.92);
+        z-index: 2;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .brand .logo {
+        font-family: "Black Ops One", system-ui;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        font-size: 0.95rem;
+      }
+
+      .brand .tag {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.65rem;
+        color: var(--muted);
+        border: 1px solid var(--edge-strong);
+        padding: 3px 8px;
+        border-radius: 2px;
+      }
+
+      .status {
+        display: flex;
+        gap: 14px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.7rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .status .alert {
+        color: var(--warn);
+      }
+
+      .main {
+        display: grid;
+        grid-template-columns: 300px 1fr 320px;
+        gap: 14px;
+        padding: 14px;
+        z-index: 1;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--edge);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .panel h3 {
+        margin: 0;
+        font-size: 0.7rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .panel .item {
+        display: flex;
+        justify-content: space-between;
+        border: 1px solid var(--edge);
+        padding: 8px 10px;
+        background: var(--slate);
+        font-size: 0.85rem;
+      }
+
+      .panel .pill {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.65rem;
+        color: var(--muted);
+        border: 1px solid var(--edge-strong);
+        padding: 2px 6px;
+        border-radius: 999px;
+        text-transform: uppercase;
+      }
+
+      .map-frame {
+        position: relative;
+        border: 1px solid var(--edge-strong);
+        background: radial-gradient(800px 400px at 50% 55%, rgba(255, 255, 255, 0.04), transparent 60%),
+          var(--charcoal);
+        overflow: hidden;
+      }
+
+      .map-header {
+        position: absolute;
+        top: 10px;
+        left: 12px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.7rem;
+        color: var(--muted);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .map-overlay {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 40px 40px;
+        opacity: 0.2;
+        pointer-events: none;
+      }
+
+      .map-svg {
+        width: 100%;
+        height: 100%;
+      }
+
+      .ticker {
+        border-top: 1px solid var(--edge);
+        background: rgba(14, 16, 20, 0.95);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.75rem;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 12px;
+      }
+
+      .ticker .flag {
+        color: var(--warn);
+      }
+
+      .badge-danger {
+        color: var(--danger);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.7rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <div class="brand">
+          <div class="logo">Sentinel Zero</div>
+          <div class="tag">OPS / THEATER</div>
+        </div>
+        <div class="status">
+          <div>Feed: Live</div>
+          <div>UTC 14:36:42</div>
+          <div class="alert">Threat: Elevated</div>
+        </div>
+      </header>
+
+      <main class="main">
+        <section class="panel">
+          <h3>Layer Control</h3>
+          <div class="item"><span>Heatmaps</span><span class="pill">On</span></div>
+          <div class="item"><span>Connections</span><span class="pill">On</span></div>
+          <div class="item"><span>Nodes</span><span class="pill">On</span></div>
+          <div class="item"><span>Tariff Overlay</span><span class="pill">Off</span></div>
+          <h3>Filters</h3>
+          <div class="item"><span>GDELT</span><span class="pill">On</span></div>
+          <div class="item"><span>USGS</span><span class="pill">On</span></div>
+          <div class="item"><span>NOAA</span><span class="pill">On</span></div>
+        </section>
+
+        <section class="map-frame">
+          <div class="map-header">Global Supply Chain Density Map</div>
+          <svg class="map-svg" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice">
+            <circle cx="600" cy="360" r="240" fill="rgba(255,255,255,0.06)" />
+            <circle cx="600" cy="360" r="190" fill="none" stroke="rgba(255,255,255,0.12)" />
+            <circle cx="600" cy="360" r="130" fill="none" stroke="rgba(255,255,255,0.18)" />
+            <path d="M430 360 Q600 210 770 360" stroke="rgba(214,217,222,0.7)" stroke-width="2" fill="none" />
+            <path d="M520 430 Q620 330 740 460" stroke="rgba(255,176,0,0.7)" stroke-width="2" fill="none" />
+            <path d="M510 470 Q640 420 760 520" stroke="rgba(255,59,48,0.6)" stroke-width="2" fill="none" />
+            <circle cx="520" cy="430" r="5" fill="#d6d9de" />
+            <circle cx="720" cy="460" r="5" fill="#d6d9de" />
+            <circle cx="610" cy="330" r="4" fill="#ffb000" />
+          </svg>
+          <div class="map-overlay"></div>
+        </section>
+
+        <section class="panel">
+          <h3>Route Brief</h3>
+          <div class="item"><span>TSMC → ASML</span><span class="pill">Air</span></div>
+          <div class="item"><span>Status</span><span class="badge-danger">At-Risk</span></div>
+          <div class="item"><span>Delay</span><span>+2.1 days</span></div>
+          <h3>Active Events</h3>
+          <div class="item"><span>Port Strike</span><span class="pill">GDELT</span></div>
+          <div class="item"><span>Typhoon Watch</span><span class="pill">NOAA</span></div>
+          <div class="item"><span>Seismic Alert</span><span class="pill">USGS</span></div>
+        </section>
+      </main>
+
+      <div class="ticker">
+        <span class="flag">⚠</span> LIVE: Labor action escalates at Busan | Storm track intersects shipping lane | EUV cargo reroute recommended
+      </div>
+    </div>
+  </body>
+</html>
