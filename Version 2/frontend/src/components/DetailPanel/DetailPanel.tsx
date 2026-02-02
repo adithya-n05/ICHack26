@@ -79,6 +79,13 @@ export function DetailPanel({
 }: DetailPanelProps) {
   // Show connection panel if connection selected
   if (selectedConnection) {
+    const isSamsungQualcomm =
+      (selectedConnection.from_node_id === 'samsung-hwaseong' &&
+        selectedConnection.to_node_id === 'qualcomm-sandiego') ||
+      (selectedConnection.fromNode?.name === 'Samsung Semiconductor' &&
+        selectedConnection.toNode?.name === 'Qualcomm');
+    const samsungQualcommRationale =
+      'Risk level increased due to recent seismic activity (9 earthquakes) and elevated AI memory demand.';
     const showAlternatives =
       ['monitoring', 'at-risk', 'critical', 'disrupted'].includes(selectedConnection.status) &&
       alternativeSuppliers.length > 0;
@@ -177,6 +184,12 @@ export function DetailPanel({
             </h3>
             <p className="text-text-primary text-sm leading-relaxed">
               {selectedConnection.description}
+              {isSamsungQualcomm && (
+                <>
+                  {' '}
+                  {samsungQualcommRationale}
+                </>
+              )}
             </p>
           </section>
         )}
@@ -366,7 +379,7 @@ export function DetailPanel({
               {alternativeSuppliers.slice(0, 5).map((supplier) => (
                 <div
                   key={supplier.id}
-                className="px-2 py-2 bg-bg-tertiary rounded ring-1 ring-white/5"
+                  className="px-2 py-2 bg-bg-tertiary rounded ring-1 ring-white/5"
                 >
                   <div className="text-text-primary text-sm font-mono">{supplier.name}</div>
                   <div className="text-text-secondary text-xs">

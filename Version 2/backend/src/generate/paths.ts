@@ -65,7 +65,7 @@ function makeEdge(
     fromNodeId: fromNode.id,
     toNodeId: toNode.id,
     sequence,
-    status: Math.random() > 0.8 ? 'monitoring' : 'healthy',
+    status: 'healthy',
     materials,
     transportMode,
     leadTimeDays,

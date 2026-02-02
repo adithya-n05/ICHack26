@@ -21,7 +21,8 @@
     "to_node_id": "qualcomm-sandiego",
     "status": "active",
     "material": "chips",
-    "volume": 500000
+    "volume": 500000,
+    "description": "Risk level increased due to recent seismic activity (9 earthquakes) and elevated AI memory demand."
   },
   {
     "id": "conn-asml-tsmc",

@@ -292,6 +292,60 @@ function App() {
     });
   };
 
+  const handleDevarajaAlternativeClick = async (selection: {
+    alternativeNodeId: string;
+    originConnectionId: string;
+    originFromNodeId: string;
+    alternativeNode?: MapCompany;
+  }) => {
+    const originConnection = userConnections.find((connection) => connection.id === selection.originConnectionId);
+    if (!originConnection) {
+      return;
+    }
+
+    try {
+      const newConnection = await createUserConnection({
+        from_node_id: originConnection.from_node_id,
+        to_node_id: selection.alternativeNodeId,
+        transport_mode: originConnection.transport_mode,
+        status: originConnection.status,
+        materials: originConnection.materials,
+        description: originConnection.description,
+        lead_time_days: originConnection.lead_time_days,
+      });
+
+      let removedOld = false;
+      try {
+        await deleteUserConnection(originConnection.id);
+        removedOld = true;
+      } catch (err) {
+        console.warn('Failed to remove old user connection after reroute:', err);
+      }
+
+      setUserConnections((prev) => {
+        const filtered = removedOld
+          ? prev.filter((connection) => connection.id !== originConnection.id)
+          : prev;
+        return [...filtered, newConnection];
+      });
+
+      const selectedFromNode = selectedConnection?.id === originConnection.id ? selectedConnection.fromNode : undefined;
+      const selectedToNode =
+        selectedConnection?.id === originConnection.id && selection.alternativeNode
+          ? normalizeCompany(selection.alternativeNode) ?? undefined
+          : undefined;
+      if (selectedFromNode || selectedToNode) {
+        setSelectedConnection({
+          ...newConnection,
+          fromNode: selectedFromNode,
+          toNode: selectedToNode,
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to reroute user connection:', err);
+    }
+  };
+
   const handleDeleteConnection = async (id: string) => {
     try {
       await deleteUserConnection(id);
@@ -336,11 +390,10 @@ function App() {
         <div className="flex items-center gap-2">
           <button
             onClick={toggleConnectMode}
-            className={`px-3 py-1 rounded font-mono text-sm transition ring-1 ${
-              connectMode
-                ? 'bg-accent-cyan/20 text-accent-cyan ring-accent-cyan/60'
-                : 'bg-bg-tertiary text-text-primary ring-white/10 hover:ring-accent-cyan/50'
-            }`}
+            className={`px-3 py-1 rounded font-mono text-sm transition ring-1 ${connectMode
+              ? 'bg-accent-cyan/20 text-accent-cyan ring-accent-cyan/60'
+              : 'bg-bg-tertiary text-text-primary ring-white/10 hover:ring-accent-cyan/50'
+              }`}
           >
             {connectMode ? 'Connect Mode: On' : 'Connect Nodes'}
           </button>
@@ -359,6 +412,7 @@ function App() {
           key={mapRefreshKey}
           onNodeClick={handleNodeClick}
           onConnectionClick={handleConnectionClick}
+          onDevarajaAlternativeClick={handleDevarajaAlternativeClick}
           onTariffHeatmapClick={handleTariffHeatmapClick}
           pathEdges={pathEdges as PathEdge[]}
           alternativeSuppliers={effectiveAlternativeSuppliers}

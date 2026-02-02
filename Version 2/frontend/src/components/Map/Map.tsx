@@ -2,9 +2,23 @@ import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { socket } from '../../lib/socket';
+import {
+  buildDevarajaAlternatives,
+  type DevarajaAlternative,
+  type DevarajaAlternativePath,
+} from '../../lib/devarajaAlternatives';
 import { createMapUpdateScheduler } from './mapUpdate';
 import { HEATMAP_LAYER_CONFIGS } from './heatmapLayerConfigs';
 import { buildHeatmapPopupHtml } from './heatmapPopup';
+import {
+  DEVARAJA_USER_CONNECTION_EXPR,
+  USER_CONNECTION_ARROW_COLOR,
+  USER_CONNECTION_GLOW_COLOR,
+  USER_CONNECTION_LINE_COLOR,
+  USER_CONNECTION_NON_DEVARAJA_ARROW_COLOR,
+  USER_CONNECTION_NON_DEVARAJA_GLOW_COLOR,
+  USER_CONNECTION_NON_DEVARAJA_LINE_COLOR,
+} from './userConnectionStyle';
 import type { TariffHeatmapSummary } from '../TariffPanel/TariffPanel';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
@@ -204,9 +218,17 @@ interface GeoEvent {
   polygon?: Array<{ lat: number; lng: number }>;
 }
 
+interface DevarajaAlternativeSelection {
+  alternativeNodeId: string;
+  originConnectionId: string;
+  originFromNodeId: string;
+  alternativeNode?: Company;
+}
+
 interface MapProps {
   onNodeClick?: (node: Company) => void;
   onConnectionClick?: (connection: Connection & { fromNode?: Company; toNode?: Company }) => void;
+  onDevarajaAlternativeClick?: (selection: DevarajaAlternativeSelection) => void;
   onTariffHeatmapClick?: (summary: TariffHeatmapSummary) => void;
   pathEdges?: PathEdge[];
   alternativeSuppliers?: AlternativeSupplier[];
@@ -216,6 +238,7 @@ interface MapProps {
 export function Map({
   onNodeClick,
   onConnectionClick,
+  onDevarajaAlternativeClick,
   onTariffHeatmapClick,
   pathEdges = [],
   alternativeSuppliers = [],
@@ -230,8 +253,11 @@ export function Map({
   const eventsRef = useRef<GeoEvent[]>([]);
   const pathEdgesRef = useRef<PathEdge[]>([]);
   const alternativeSuppliersRef = useRef<AlternativeSupplier[]>([]);
+  const devarajaAlternativesRef = useRef<DevarajaAlternative[]>([]);
+  const devarajaAlternativePathsRef = useRef<DevarajaAlternativePath[]>([]);
   const onNodeClickRef = useRef(onNodeClick);
   const onConnectionClickRef = useRef(onConnectionClick);
+  const onDevarajaAlternativeClickRef = useRef(onDevarajaAlternativeClick);
 
   // Pending events buffer for batching socket updates
   const pendingNewEvents = useRef<GeoEvent[]>([]);
@@ -275,6 +301,11 @@ export function Map({
     [connections, userConnections]
   );
 
+  const { alternatives: devarajaAlternatives, paths: devarajaAlternativePaths } = useMemo(
+    () => buildDevarajaAlternatives(nodes, userConnections),
+    [nodes, userConnections]
+  );
+
   useEffect(() => {
     connectionsRef.current = mergedConnections;
   }, [mergedConnections]);
@@ -288,12 +319,21 @@ export function Map({
   }, [alternativeSuppliers]);
 
   useEffect(() => {
+    devarajaAlternativesRef.current = devarajaAlternatives;
+    devarajaAlternativePathsRef.current = devarajaAlternativePaths;
+  }, [devarajaAlternatives, devarajaAlternativePaths]);
+
+  useEffect(() => {
     onNodeClickRef.current = onNodeClick;
   }, [onNodeClick]);
 
   useEffect(() => {
     onConnectionClickRef.current = onConnectionClick;
   }, [onConnectionClick]);
+
+  useEffect(() => {
+    onDevarajaAlternativeClickRef.current = onDevarajaAlternativeClick;
+  }, [onDevarajaAlternativeClick]);
 
   // Fetch events from API
   useEffect(() => {
@@ -579,6 +619,55 @@ export function Map({
       })
       .filter((feature): feature is GeoJSON.Feature<GeoJSON.Point> => feature !== null);
   }, []);
+
+  const getDevarajaAlternativeFeatures = useCallback(() => {
+    return devarajaAlternativesRef.current
+      .map((alternative) => {
+        const location = alternative.location
+          ? [alternative.location.lng, alternative.location.lat]
+          : typeof alternative.lat === 'number' && typeof alternative.lng === 'number'
+            ? [alternative.lng, alternative.lat]
+            : null;
+        if (!location) return null;
+        return {
+          type: 'Feature' as const,
+          id: `${alternative.originConnectionId}-${alternative.id}`,
+          geometry: {
+            type: 'Point' as const,
+            coordinates: location,
+          },
+          properties: {
+            id: alternative.id,
+            name: alternative.name,
+            origin_connection_id: alternative.originConnectionId,
+            origin_from_node_id: alternative.originFromNodeId,
+          },
+        };
+      })
+      .filter((feature): feature is GeoJSON.Feature<GeoJSON.Point> => feature !== null);
+  }, []);
+
+  const getDevarajaAlternativePathFeatures = useCallback(() => {
+    return devarajaAlternativePathsRef.current
+      .map((path) => {
+        const from = getNodePosition(path.fromNodeId);
+        const to = getNodePosition(path.toNodeId);
+        if (!from || !to) return null;
+        return {
+          type: 'Feature' as const,
+          id: path.id,
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: [from, to],
+          },
+          properties: {
+            id: path.id,
+            origin_connection_id: path.originConnectionId,
+          },
+        };
+      })
+      .filter((feature): feature is GeoJSON.Feature<GeoJSON.LineString> => feature !== null);
+  }, [getNodePosition]);
 
   const getEventPointFeatures = useCallback((eventsData: GeoEvent[] = eventsRef.current) => {
     return eventsData
@@ -917,6 +1006,12 @@ export function Map({
       const alternativesSource = mapInstance.getSource('alternatives') as
         | mapboxgl.GeoJSONSource
         | undefined;
+      const devarajaAlternativesSource = mapInstance.getSource('devaraja-alternatives') as
+        | mapboxgl.GeoJSONSource
+        | undefined;
+      const devarajaAlternativePathsSource = mapInstance.getSource('devaraja-alternative-paths') as
+        | mapboxgl.GeoJSONSource
+        | undefined;
       const pathEndpointsSource = mapInstance.getSource('path-endpoints') as
         | mapboxgl.GeoJSONSource
         | undefined;
@@ -925,6 +1020,8 @@ export function Map({
       connectionsSource?.setData(buildFeatureCollection(getConnectionFeatures()));
       pathsSource?.setData(buildFeatureCollection(getPathFeatures()));
       alternativesSource?.setData(buildFeatureCollection(getAlternativeFeatures()));
+      devarajaAlternativesSource?.setData(buildFeatureCollection(getDevarajaAlternativeFeatures()));
+      devarajaAlternativePathsSource?.setData(buildFeatureCollection(getDevarajaAlternativePathFeatures()));
       pathEndpointsSource?.setData(buildFeatureCollection(getPathEndpointFeatures()));
       updateEventSources(mapInstance);
     },
@@ -932,6 +1029,8 @@ export function Map({
       buildFeatureCollection,
       getAlternativeFeatures,
       getConnectionFeatures,
+      getDevarajaAlternativeFeatures,
+      getDevarajaAlternativePathFeatures,
       getNodeFeatures,
       getPathEndpointFeatures,
       getPathFeatures,
@@ -954,6 +1053,7 @@ export function Map({
 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
+    let pulseFrameId: number | null = null;
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
@@ -1051,6 +1151,14 @@ export function Map({
       mapInstance.addSource('alternatives', {
         type: 'geojson',
         data: buildFeatureCollection(getAlternativeFeatures()),
+      });
+      mapInstance.addSource('devaraja-alternatives', {
+        type: 'geojson',
+        data: buildFeatureCollection(getDevarajaAlternativeFeatures()),
+      });
+      mapInstance.addSource('devaraja-alternative-paths', {
+        type: 'geojson',
+        data: buildFeatureCollection(getDevarajaAlternativePathFeatures()),
       });
       mapInstance.addSource('path-endpoints', {
         type: 'geojson',
@@ -1257,6 +1365,113 @@ export function Map({
 
       mapInstance.addLayer(
         {
+          id: 'devaraja-alternative-paths-glow',
+          type: 'line',
+          source: 'devaraja-alternative-paths',
+          layout: {
+            'line-cap': 'round',
+            'line-join': 'round',
+          },
+          paint: {
+            'line-color': 'rgba(0, 255, 128, 0.45)',
+            'line-width': 7,
+            'line-blur': 3.2,
+            'line-opacity': 0.6,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
+          id: 'devaraja-alternative-paths',
+          type: 'line',
+          source: 'devaraja-alternative-paths',
+          layout: {
+            'line-cap': 'round',
+            'line-join': 'round',
+          },
+          paint: {
+            'line-color': 'rgba(0, 255, 128, 0.75)',
+            'line-width': 2.4,
+            'line-opacity': 0.65,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
+          id: 'devaraja-alternatives-glow',
+          type: 'circle',
+          source: 'devaraja-alternatives',
+          paint: {
+            'circle-radius': 12,
+            'circle-color': 'rgba(0, 255, 128, 0.5)',
+            'circle-blur': 0.9,
+            'circle-opacity': 0.6,
+          },
+        },
+        beforeId
+      );
+
+      mapInstance.addLayer(
+        {
+          id: 'devaraja-alternatives',
+          type: 'circle',
+          source: 'devaraja-alternatives',
+          paint: {
+            'circle-radius': 6,
+            'circle-color': 'rgba(0, 255, 128, 0.95)',
+            'circle-stroke-color': 'rgba(0, 255, 128, 1)',
+            'circle-stroke-width': 1,
+          },
+        },
+        beforeId
+      );
+
+      const pulseAlternatives = (timestamp: number) => {
+        const phase = (timestamp % 1600) / 1600;
+        const pulse = 0.75 + 0.25 * Math.sin(phase * Math.PI * 2);
+        if (mapInstance.getLayer('devaraja-alternatives')) {
+          mapInstance.setPaintProperty('devaraja-alternatives', 'circle-radius', 5 + pulse * 3);
+          mapInstance.setPaintProperty('devaraja-alternatives', 'circle-opacity', 0.7 + pulse * 0.25);
+        }
+        if (mapInstance.getLayer('devaraja-alternatives-glow')) {
+          mapInstance.setPaintProperty('devaraja-alternatives-glow', 'circle-radius', 10 + pulse * 5);
+          mapInstance.setPaintProperty('devaraja-alternatives-glow', 'circle-opacity', 0.4 + pulse * 0.4);
+        }
+        pulseFrameId = requestAnimationFrame(pulseAlternatives);
+      };
+
+      pulseFrameId = requestAnimationFrame(pulseAlternatives);
+
+      mapInstance.on('mouseenter', 'devaraja-alternatives', () => {
+        mapInstance.getCanvas().style.cursor = 'pointer';
+      });
+
+      mapInstance.on('mouseleave', 'devaraja-alternatives', () => {
+        mapInstance.getCanvas().style.cursor = '';
+      });
+
+      mapInstance.on('click', 'devaraja-alternatives', (event) => {
+        const feature = event.features?.[0];
+        const alternativeNodeId = feature?.properties?.id as string | undefined;
+        const originConnectionId = feature?.properties?.origin_connection_id as string | undefined;
+        const originFromNodeId = feature?.properties?.origin_from_node_id as string | undefined;
+        const clickHandler = onDevarajaAlternativeClickRef.current;
+        if (!alternativeNodeId || !originConnectionId || !originFromNodeId || !clickHandler) return;
+        const alternativeNode = nodesRef.current.find((node) => node.id === alternativeNodeId);
+        clickHandler({
+          alternativeNodeId,
+          originConnectionId,
+          originFromNodeId,
+          alternativeNode,
+        });
+      });
+
+      mapInstance.addLayer(
+        {
           id: 'connections-glow',
           type: 'line',
           source: 'connections',
@@ -1267,8 +1482,10 @@ export function Map({
           paint: {
             'line-color': [
               'case',
+              DEVARAJA_USER_CONNECTION_EXPR,
+              USER_CONNECTION_GLOW_COLOR,
               ['boolean', ['get', 'is_user_connection'], false],
-              'rgba(0, 255, 209, 0.85)',
+              USER_CONNECTION_NON_DEVARAJA_GLOW_COLOR,
               [
                 'match',
                 ['get', 'status'],
@@ -1280,7 +1497,7 @@ export function Map({
                 'rgba(200, 200, 200, 0.6)',
               ],
             ],
-            'line-width': ['case', ['boolean', ['get', 'is_user_connection'], false], 11, 5],
+            'line-width': ['case', DEVARAJA_USER_CONNECTION_EXPR, 11, 5],
             'line-blur': 3.8,
             'line-opacity': 0.9,
           },
@@ -1343,8 +1560,10 @@ export function Map({
           paint: {
             'line-color': [
               'case',
+              DEVARAJA_USER_CONNECTION_EXPR,
+              USER_CONNECTION_LINE_COLOR,
               ['boolean', ['get', 'is_user_connection'], false],
-              'rgba(0, 255, 209, 1)',
+              USER_CONNECTION_NON_DEVARAJA_LINE_COLOR,
               [
                 'match',
                 ['get', 'status'],
@@ -1356,7 +1575,7 @@ export function Map({
                 'rgba(220, 220, 220, 0.9)',
               ],
             ],
-            'line-width': ['case', ['boolean', ['get', 'is_user_connection'], false], 4.2, 2.2],
+            'line-width': ['case', DEVARAJA_USER_CONNECTION_EXPR, 4.2, 2.2],
             'line-opacity': 0.98,
           },
         },
@@ -1382,8 +1601,10 @@ export function Map({
           paint: {
             'text-color': [
               'case',
+              DEVARAJA_USER_CONNECTION_EXPR,
+              USER_CONNECTION_ARROW_COLOR,
               ['boolean', ['get', 'is_user_connection'], false],
-              'rgba(0, 255, 209, 0.95)',
+              USER_CONNECTION_NON_DEVARAJA_ARROW_COLOR,
               [
                 'match',
                 ['get', 'status'],
@@ -1413,7 +1634,7 @@ export function Map({
           },
           paint: {
             'line-color': 'rgba(0, 0, 0, 0)',
-            'line-width': ['case', ['boolean', ['get', 'is_user_connection'], false], 16, 12],
+            'line-width': ['case', DEVARAJA_USER_CONNECTION_EXPR, 16, 12],
             'line-opacity': 0.01,
           },
         },
@@ -1673,6 +1894,9 @@ export function Map({
     });
 
     return () => {
+      if (pulseFrameId) {
+        cancelAnimationFrame(pulseFrameId);
+      }
       map.current?.remove();
       map.current = null;
     };

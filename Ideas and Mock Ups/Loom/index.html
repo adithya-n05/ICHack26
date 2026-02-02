@@ -1,0 +1,2037 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loom — Autonomous Knowledge Weaver</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Orbitron:wght@500;700;900&display=swap"
+        rel="stylesheet">
+
+    <!-- Mapbox -->
+    <link href='https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css' rel='stylesheet' />
+    <script src='https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js'></script>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        :root {
+            --bg-deep: #000000;
+            --bg-void: #050505;
+            --bg-surface: #0d0d0d;
+            --bg-elevated: #1a1a1a;
+            --accent-cyan: #00ffff;
+            --accent-electric: #0affff;
+            --accent-magenta: #ff00ff;
+            --accent-amber: #ffaa00;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --text-tertiary: #505050;
+            --glow-cyan: rgba(0, 255, 255, 0.6);
+            --glow-magenta: rgba(255, 0, 255, 0.6);
+            --glow-amber: rgba(255, 170, 0, 0.6);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Vignette effect */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.8) 100%);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Ambient glow effect */
+        body::after {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background:
+                radial-gradient(circle at 20% 30%, rgba(0, 255, 255, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(255, 0, 255, 0.03) 0%, transparent 50%);
+            animation: ambientShift 20s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes ambientShift {
+
+            0%,
+            100% {
+                transform: translate(0, 0) rotate(0deg);
+            }
+
+            50% {
+                transform: translate(5%, 5%) rotate(5deg);
+            }
+        }
+
+        .container {
+            position: relative;
+            z-index: 2;
+            width: 100vw;
+            height: 100vh;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+        }
+
+        /* Header */
+        header {
+            padding: 1.5rem 2.5rem;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(30px);
+            border-bottom: 1px solid rgba(0, 255, 255, 0.15);
+            position: relative;
+            z-index: 100;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            font-weight: 900;
+            color: var(--accent-cyan);
+            letter-spacing: 0.2em;
+            text-shadow:
+                0 0 20px var(--glow-cyan),
+                0 0 40px var(--glow-cyan),
+                0 0 60px var(--glow-cyan);
+            animation: logoBreath 4s ease-in-out infinite;
+        }
+
+        @keyframes logoBreath {
+
+            0%,
+            100% {
+                opacity: 0.9;
+                text-shadow: 0 0 20px var(--glow-cyan);
+            }
+
+            50% {
+                opacity: 1;
+                text-shadow: 0 0 40px var(--glow-cyan), 0 0 80px var(--glow-cyan);
+            }
+        }
+
+        .logo-subtitle {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--text-tertiary);
+            font-weight: 300;
+        }
+
+        .query-section {
+            flex: 1;
+            max-width: 700px;
+            position: relative;
+        }
+
+        .query-input {
+            width: 100%;
+            padding: 1rem 7rem 1rem 1.5rem;
+            background: rgba(26, 26, 26, 0.8);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            transition: all 0.4s ease;
+            outline: none;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .query-input:focus {
+            border-color: var(--accent-cyan);
+            background: rgba(0, 0, 0, 0.95);
+            box-shadow:
+                inset 0 0 20px rgba(0, 0, 0, 0.8),
+                0 0 40px var(--glow-cyan);
+        }
+
+        .query-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .submit-btn {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 0.7rem 1.5rem;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-electric));
+            border: none;
+            border-radius: 6px;
+            color: var(--bg-deep);
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: 0 0 20px var(--glow-cyan);
+        }
+
+        .submit-btn:hover {
+            box-shadow: 0 0 40px var(--glow-cyan), 0 0 60px var(--glow-cyan);
+            transform: translateY(-50%) scale(1.05);
+        }
+
+        .submit-btn:active {
+            transform: translateY(-50%) scale(0.98);
+        }
+
+        /* Agent Status */
+        .agent-status {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .agent-pill {
+            padding: 0.6rem 1rem;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .agent-pulse {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            animation: agentPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes agentPulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.8);
+                opacity: 0.5;
+            }
+        }
+
+        .agent-pill.researcher {
+            color: var(--accent-cyan);
+            border-color: rgba(0, 255, 255, 0.2);
+        }
+
+        .agent-pill.researcher .agent-pulse {
+            background: var(--accent-cyan);
+            box-shadow: 0 0 10px var(--glow-cyan);
+        }
+
+        .agent-pill.analyst {
+            color: var(--accent-magenta);
+            border-color: rgba(255, 0, 255, 0.2);
+        }
+
+        .agent-pill.analyst .agent-pulse {
+            background: var(--accent-magenta);
+            box-shadow: 0 0 10px var(--glow-magenta);
+            animation-delay: 0.4s;
+        }
+
+        .agent-pill.factchecker {
+            color: var(--accent-amber);
+            border-color: rgba(255, 170, 0, 0.2);
+        }
+
+        .agent-pill.factchecker .agent-pulse {
+            background: var(--accent-amber);
+            box-shadow: 0 0 10px var(--glow-amber);
+            animation-delay: 0.8s;
+        }
+
+        /* Main Layout */
+        main {
+            display: grid;
+            grid-template-columns: 1fr 450px;
+            height: calc(100vh - 140px);
+            position: relative;
+        }
+
+        /* Left: 3D Graph + Map Split */
+        .visualization-container {
+            display: grid;
+            grid-template-rows: 1fr 300px;
+            gap: 1px;
+            background: rgba(0, 255, 255, 0.05);
+        }
+
+        .graph-3d-container {
+            position: relative;
+            background: var(--bg-deep);
+            overflow: hidden;
+        }
+
+        #graph3d {
+            width: 100%;
+            height: 100%;
+        }
+
+        .map-container {
+            position: relative;
+            background: var(--bg-void);
+            border-top: 1px solid rgba(0, 255, 255, 0.1);
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Thinking Overlay */
+        .thinking-overlay {
+            position: absolute;
+            top: 1.5rem;
+            left: 1.5rem;
+            padding: 1rem 1.5rem;
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid var(--accent-cyan);
+            border-radius: 8px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 0 60px var(--glow-cyan);
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: var(--accent-cyan);
+            display: none;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            z-index: 10;
+        }
+
+        .thinking-overlay.active {
+            display: block;
+            animation: thinkingPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes thinkingPulse {
+
+            0%,
+            100% {
+                opacity: 0.9;
+                box-shadow: 0 0 40px var(--glow-cyan);
+            }
+
+            50% {
+                opacity: 1;
+                box-shadow: 0 0 80px var(--glow-cyan), 0 0 120px var(--glow-cyan);
+            }
+        }
+
+        /* View Mode Toggle */
+        .view-toggle {
+            position: absolute;
+            top: 1.5rem;
+            right: 1.5rem;
+            display: flex;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            overflow: hidden;
+            z-index: 10;
+        }
+
+        .view-btn {
+            padding: 0.6rem 1.2rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .view-btn:last-child {
+            border-right: none;
+        }
+
+        .view-btn.active {
+            background: var(--accent-cyan);
+            color: var(--bg-deep);
+            box-shadow: 0 0 20px var(--glow-cyan);
+        }
+
+        .view-btn:hover:not(.active) {
+            background: rgba(0, 255, 255, 0.1);
+            color: var(--accent-cyan);
+        }
+
+        /* Graph Controls */
+        .graph-controls {
+            position: absolute;
+            bottom: 1.5rem;
+            left: 1.5rem;
+            display: flex;
+            gap: 0.5rem;
+            z-index: 10;
+        }
+
+        .control-btn {
+            width: 44px;
+            height: 44px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 8px;
+            color: var(--accent-cyan);
+            font-size: 1.2rem;
+            font-weight: 300;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-btn:hover {
+            background: var(--accent-cyan);
+            color: var(--bg-deep);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 30px var(--glow-cyan);
+            transform: scale(1.1);
+        }
+
+        /* Map Legend */
+        .map-legend {
+            position: absolute;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid rgba(0, 255, 255, 0.15);
+            border-radius: 8px;
+            backdrop-filter: blur(20px);
+            font-size: 0.7rem;
+            z-index: 10;
+        }
+
+        .legend-title {
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent-cyan);
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        /* Right Panel */
+        .detail-panel {
+            background: var(--bg-void);
+            border-left: 1px solid rgba(0, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 1.5rem;
+            background: rgba(0, 0, 0, 0.6);
+            border-bottom: 1px solid rgba(0, 255, 255, 0.1);
+        }
+
+        .panel-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .panel-subtitle {
+            font-size: 0.7rem;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+
+        /* Node Detail Card */
+        .node-detail {
+            background: var(--bg-surface);
+            border: 1px solid rgba(0, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            animation: slideInRight 0.5s ease;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .node-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .node-type-badge {
+            padding: 0.35rem 0.9rem;
+            border-radius: 20px;
+            font-size: 0.6rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .node-type-badge.researcher {
+            background: rgba(0, 255, 255, 0.15);
+            color: var(--accent-cyan);
+            border: 1px solid var(--accent-cyan);
+            box-shadow: 0 0 20px var(--glow-cyan);
+        }
+
+        .node-type-badge.analyst {
+            background: rgba(255, 0, 255, 0.15);
+            color: var(--accent-magenta);
+            border: 1px solid var(--accent-magenta);
+            box-shadow: 0 0 20px var(--glow-magenta);
+        }
+
+        .node-type-badge.factchecker {
+            background: rgba(255, 170, 0, 0.15);
+            color: var(--accent-amber);
+            border: 1px solid var(--accent-amber);
+            box-shadow: 0 0 20px var(--glow-amber);
+        }
+
+        .node-type-badge.concept {
+            background: rgba(138, 43, 226, 0.15);
+            color: #8a2be2;
+            border: 1px solid #8a2be2;
+            box-shadow: 0 0 20px rgba(138, 43, 226, 0.6);
+        }
+
+        .badge-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: badgePulse 2s ease-in-out infinite;
+        }
+
+        @keyframes badgePulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        .node-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            line-height: 1.4;
+        }
+
+        .node-content {
+            font-size: 0.8rem;
+            line-height: 1.7;
+            color: var(--text-secondary);
+            margin-bottom: 1.25rem;
+        }
+
+        /* Geo Tag */
+        .geo-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.3rem 0.7rem;
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 12px;
+            font-size: 0.65rem;
+            color: var(--accent-cyan);
+            margin-top: 0.5rem;
+        }
+
+        /* Reasoning Section */
+        .reasoning-section {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(0, 255, 255, 0.1);
+        }
+
+        .section-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent-cyan);
+            margin-bottom: 1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section-label::before {
+            content: '';
+            width: 20px;
+            height: 2px;
+            background: var(--accent-cyan);
+            box-shadow: 0 0 10px var(--glow-cyan);
+        }
+
+        .reasoning-step {
+            position: relative;
+            padding-left: 1.5rem;
+            padding-bottom: 1.25rem;
+            border-left: 2px solid rgba(0, 255, 255, 0.15);
+        }
+
+        .reasoning-step:last-child {
+            border-left-color: transparent;
+            padding-bottom: 0;
+        }
+
+        .reasoning-step::before {
+            content: '';
+            position: absolute;
+            left: -5px;
+            top: 0;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            box-shadow: 0 0 10px var(--glow-cyan);
+        }
+
+        .step-text {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* Sources */
+        .sources-section {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(0, 255, 255, 0.1);
+        }
+
+        .source-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-left: 2px solid var(--accent-cyan);
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .source-link:hover {
+            background: rgba(0, 255, 255, 0.05);
+            border-left-color: var(--accent-cyan);
+            border-left-width: 3px;
+            color: var(--accent-cyan);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+            transform: translateX(4px);
+        }
+
+        .source-icon {
+            width: 14px;
+            height: 14px;
+            opacity: 0.6;
+        }
+
+        /* Footer */
+        footer {
+            padding: 1rem 2.5rem;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(30px);
+            border-top: 1px solid rgba(0, 255, 255, 0.15);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.7rem;
+        }
+
+        .stats {
+            display: flex;
+            gap: 2.5rem;
+        }
+
+        .stat-group {
+            display: flex;
+            align-items: baseline;
+            gap: 0.5rem;
+        }
+
+        .stat-label {
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.65rem;
+        }
+
+        .stat-value {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--accent-cyan);
+            text-shadow: 0 0 10px var(--glow-cyan);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: var(--text-tertiary);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            box-shadow: 0 0 15px var(--glow-cyan);
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes statusPulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        /* Scrollbar */
+        .panel-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .panel-content::-webkit-scrollbar-track {
+            background: var(--bg-deep);
+        }
+
+        .panel-content::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+
+        .panel-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 255, 255, 0.6);
+        }
+
+        /* Empty state */
+        .empty-state {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 5;
+        }
+
+        .empty-icon {
+            font-size: 6rem;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1.5rem;
+            opacity: 0.2;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        .empty-text {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        /* Confidence Meter */
+        .confidence-meter {
+            position: absolute;
+            top: 5rem;
+            right: 1.5rem;
+            width: 200px;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(0, 255, 255, 0.15);
+            border-radius: 8px;
+            backdrop-filter: blur(20px);
+            z-index: 10;
+        }
+
+        .meter-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-tertiary);
+            margin-bottom: 0.75rem;
+        }
+
+        .meter-bars {
+            display: flex;
+            gap: 4px;
+        }
+
+        .meter-bar {
+            flex: 1;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s ease;
+        }
+
+        .meter-bar.active::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-electric));
+            box-shadow: 0 0 20px var(--glow-cyan);
+            animation: barGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes barGlow {
+
+            0%,
+            100% {
+                opacity: 0.8;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        .meter-value {
+            margin-top: 0.5rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            text-align: center;
+            text-shadow: 0 0 20px var(--glow-cyan);
+        }
+
+        /* 3D Canvas styling */
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div class="logo-section">
+                    <div>
+                        <div class="logo">LOOM</div>
+                        <div class="logo-subtitle">Knowledge Weaver</div>
+                    </div>
+                </div>
+
+                <div class="query-section">
+                    <input type="text" class="query-input" id="queryInput" placeholder="Enter complex research query..."
+                        autocomplete="off" />
+                    <button class="submit-btn" id="submitBtn">Initialize</button>
+                </div>
+
+                <div class="agent-status">
+                    <div class="agent-pill researcher">
+                        <div class="agent-pulse"></div>
+                        <span>Research</span>
+                    </div>
+                    <div class="agent-pill analyst">
+                        <div class="agent-pulse"></div>
+                        <span>Analyze</span>
+                    </div>
+                    <div class="agent-pill factchecker">
+                        <div class="agent-pulse"></div>
+                        <span>Verify</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="visualization-container">
+                <!-- 3D Knowledge Graph -->
+                <div class="graph-3d-container">
+                    <div id="graph3d"></div>
+
+                    <div class="thinking-overlay" id="thinkingOverlay">
+                        <span id="thinkingText">Initializing Neural Mesh...</span>
+                    </div>
+
+                    <div class="view-toggle">
+                        <button class="view-btn active" data-view="3d">3D Graph</button>
+                        <button class="view-btn" data-view="network">Network</button>
+                        <button class="view-btn" data-view="hierarchy">Hierarchy</button>
+                    </div>
+
+                    <div class="confidence-meter">
+                        <div class="meter-label">Analysis Confidence</div>
+                        <div class="meter-bars">
+                            <div class="meter-bar"></div>
+                            <div class="meter-bar"></div>
+                            <div class="meter-bar"></div>
+                            <div class="meter-bar"></div>
+                            <div class="meter-bar"></div>
+                        </div>
+                        <div class="meter-value" id="confidenceValue">0%</div>
+                    </div>
+
+                    <div class="graph-controls">
+                        <button class="control-btn" id="rotateToggle" title="Toggle Rotation">↻</button>
+                        <button class="control-btn" id="resetCamera" title="Reset Camera">⊙</button>
+                        <button class="control-btn" id="expandGraph" title="Expand Graph">⊕</button>
+                    </div>
+
+                    <div class="empty-state" id="emptyState">
+                        <div class="empty-icon">◈</div>
+                        <div class="empty-text">Initialize Knowledge Synthesis</div>
+                    </div>
+                </div>
+
+                <!-- Mapbox Geospatial Layer -->
+                <div class="map-container">
+                    <div id="map"></div>
+
+                    <div class="map-legend">
+                        <div class="legend-title">Geospatial Data</div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: var(--accent-cyan);"></div>
+                            <span>Research Sources</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: var(--accent-magenta);"></div>
+                            <span>Analysis Zones</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: var(--accent-amber);"></div>
+                            <span>Verified Data</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detail Panel -->
+            <div class="detail-panel">
+                <div class="panel-header">
+                    <div class="panel-title">Node Inspector</div>
+                    <div class="panel-subtitle">Select node to view reasoning chain</div>
+                </div>
+                <div class="panel-content" id="panelContent">
+                    <div class="node-detail">
+                        <div class="node-title">Loom Intelligence System</div>
+                        <div class="node-content">
+                            Loom deploys autonomous agents to construct transparent knowledge graphs. Unlike traditional
+                            search, Loom reveals the complete reasoning chain—every source, every inference, every
+                            validation step.
+                            <br><br>
+                            <strong style="color: var(--accent-cyan);">Researcher Agent</strong><br>
+                            Gathers evidence from academic databases, industry reports, and verified sources. Extracts
+                            geospatial data when relevant.
+                            <br><br>
+                            <strong style="color: var(--accent-magenta);">Analyst Agent</strong><br>
+                            Synthesizes patterns across data points. Identifies correlations, causal chains, and
+                            emergent insights.
+                            <br><br>
+                            <strong style="color: var(--accent-amber);">Fact-Checker Agent</strong><br>
+                            Validates claims against authoritative sources. Assigns confidence scores and flags
+                            contradictions.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <div class="stats">
+                <div class="stat-group">
+                    <span class="stat-label">Nodes</span>
+                    <span class="stat-value" id="nodeCount">0</span>
+                </div>
+                <div class="stat-group">
+                    <span class="stat-label">Edges</span>
+                    <span class="stat-value" id="edgeCount">0</span>
+                </div>
+                <div class="stat-group">
+                    <span class="stat-label">Depth</span>
+                    <span class="stat-value" id="depthValue">0</span>
+                </div>
+                <div class="stat-group">
+                    <span class="stat-label">Locations</span>
+                    <span class="stat-value" id="locationCount">0</span>
+                </div>
+            </div>
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span id="statusText">System Ready</span>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // ============================================
+        // MAPBOX INITIALIZATION
+        // ============================================
+
+        // NOTE: You'll need to add your Mapbox access token
+        // Get one free at: https://www.mapbox.com/
+        mapboxgl.accessToken = 'pk.eyJ1IjoiYWRpdGh5YW4wNSIsImEiOiJjbWwxZWFtNnowNjI3M2tzYTVmbG9keWN5In0.M686z8SrmhccrUVl343F1w';
+
+        let map;
+
+        try {
+            map = new mapboxgl.Map({
+                container: 'map',
+                style: 'mapbox://styles/mapbox/dark-v11',
+                center: [10.7522, 59.9139], // Oslo, Norway (for demo)
+                zoom: 2,
+                pitch: 45,
+                bearing: 0,
+                antialias: true
+            });
+
+            console.log('Mapbox initialized');
+        } catch (error) {
+            console.error('Mapbox initialization error:', error);
+        }
+
+        let mapReady = false;
+
+        if (map) {
+            map.on('load', () => {
+                console.log('Map load event triggered');
+
+                // Add 3D building layer
+                try {
+                    map.addLayer({
+                        'id': '3d-buildings',
+                        'source': 'composite',
+                        'source-layer': 'building',
+                        'filter': ['==', 'extrude', 'true'],
+                        'type': 'fill-extrusion',
+                        'minzoom': 8,
+                        'paint': {
+                            'fill-extrusion-color': '#000',
+                            'fill-extrusion-height': ['get', 'height'],
+                            'fill-extrusion-base': ['get', 'min_height'],
+                            'fill-extrusion-opacity': 0.6
+                        }
+                    });
+                    console.log('3D buildings layer added');
+                } catch (error) {
+                    console.error('Error adding 3D buildings:', error);
+                }
+
+                mapReady = true;
+                console.log('Map loaded and ready');
+            });
+
+            map.on('error', (e) => {
+                console.error('Map error:', e);
+            });
+        }
+
+        // Store map markers and connections
+        let mapMarkers = [];
+        let mapConnections = [];
+
+        function addMapMarker(coords, type, label) {
+            if (!mapReady) {
+                console.log('Map not ready, queueing marker for later');
+                setTimeout(() => addMapMarker(coords, type, label), 500);
+                return;
+            }
+
+            const colors = {
+                researcher: '#00ffff',
+                analyst: '#ff00ff',
+                factchecker: '#ffaa00'
+            };
+
+            // Create much larger, more visible marker
+            const el = document.createElement('div');
+            el.style.width = '24px';
+            el.style.height = '24px';
+            el.style.borderRadius = '50%';
+            el.style.background = colors[type];
+            el.style.border = `4px solid ${colors[type]}`;
+            el.style.boxShadow = `0 0 40px ${colors[type]}, 0 0 80px ${colors[type]}`;
+            el.style.cursor = 'pointer';
+            el.style.animation = 'markerPulse 2s ease-in-out infinite';
+            el.style.position = 'relative';
+            el.style.zIndex = '1000';
+
+            // Add inner pulse
+            const innerPulse = document.createElement('div');
+            innerPulse.style.position = 'absolute';
+            innerPulse.style.top = '50%';
+            innerPulse.style.left = '50%';
+            innerPulse.style.transform = 'translate(-50%, -50%)';
+            innerPulse.style.width = '8px';
+            innerPulse.style.height = '8px';
+            innerPulse.style.borderRadius = '50%';
+            innerPulse.style.background = '#fff';
+            innerPulse.style.boxShadow = `0 0 20px #fff`;
+            el.appendChild(innerPulse);
+
+            const marker = new mapboxgl.Marker(el)
+                .setLngLat(coords)
+                .setPopup(new mapboxgl.Popup({ offset: 25, className: 'custom-popup' })
+                    .setHTML(`<div style="color: #000; padding: 0.5rem; font-size: 0.75rem;"><strong>${label}</strong><br><em>${type}</em></div>`))
+                .addTo(map);
+
+            mapMarkers.push(marker);
+
+            console.log(`✓ Added marker at [${coords[0]}, ${coords[1]}] for "${label}" (${type})`);
+
+            // Don't fly on every marker, just pan smoothly
+            if (mapMarkers.length === 1) {
+                map.flyTo({
+                    center: coords,
+                    zoom: 4,
+                    duration: 2000,
+                    essential: true
+                });
+            }
+
+            // Update location count
+            document.getElementById('locationCount').textContent = mapMarkers.length;
+
+            // Draw connection lines between markers
+            if (mapMarkers.length > 1) {
+                drawMapConnections();
+            }
+        }
+
+        function drawMapConnections() {
+            if (!mapReady || mapMarkers.length < 2) return;
+
+            // Remove old connection layer if exists
+            if (map.getSource('connections')) {
+                map.removeLayer('connection-lines');
+                map.removeSource('connections');
+            }
+
+            // Create GeoJSON for connections
+            const features = [];
+            for (let i = 1; i < mapMarkers.length; i++) {
+                const from = mapMarkers[i - 1].getLngLat();
+                const to = mapMarkers[i].getLngLat();
+
+                features.push({
+                    type: 'Feature',
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: [[from.lng, from.lat], [to.lng, to.lat]]
+                    },
+                    properties: {
+                        color: '#00ffff'
+                    }
+                });
+            }
+
+            try {
+                map.addSource('connections', {
+                    type: 'geojson',
+                    data: {
+                        type: 'FeatureCollection',
+                        features: features
+                    }
+                });
+
+                map.addLayer({
+                    id: 'connection-lines',
+                    type: 'line',
+                    source: 'connections',
+                    paint: {
+                        'line-color': '#00ffff',
+                        'line-width': 2,
+                        'line-opacity': 0.6,
+                        'line-dasharray': [2, 2]
+                    }
+                });
+
+                console.log('Drew connection lines on map');
+            } catch (error) {
+                console.error('Error drawing map connections:', error);
+            }
+        }
+
+        // ============================================
+        // THREE.JS 3D GRAPH
+        // ============================================
+
+        let scene, camera, renderer, controls;
+        let nodes3D = [];
+        let edges3D = [];
+        let nodeObjects = [];
+        let edgeObjects = [];
+        let autoRotate = true;
+        let selectedNode3D = null;
+
+        function initThreeJS() {
+            const container = document.getElementById('graph3d');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // Scene
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x000000, 500, 2000);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(60, width / height, 1, 3000);
+            camera.position.set(0, 0, 600);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(width, height);
+            renderer.setClearColor(0x000000, 1);
+            container.appendChild(renderer.domElement);
+
+            // Ambient light
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            scene.add(ambientLight);
+
+            // Point lights with colors
+            const cyanLight = new THREE.PointLight(0x00ffff, 1, 1000);
+            cyanLight.position.set(200, 200, 200);
+            scene.add(cyanLight);
+
+            const magentaLight = new THREE.PointLight(0xff00ff, 1, 1000);
+            magentaLight.position.set(-200, -200, 200);
+            scene.add(magentaLight);
+
+            // Add grid helper
+            const gridHelper = new THREE.GridHelper(1000, 20, 0x00ffff, 0x003333);
+            gridHelper.material.opacity = 0.1;
+            gridHelper.material.transparent = true;
+            scene.add(gridHelper);
+
+            // Raycaster for mouse picking
+            window.raycaster = new THREE.Raycaster();
+            window.mouse = new THREE.Vector2();
+
+            renderer.domElement.addEventListener('click', onCanvasClick);
+            renderer.domElement.addEventListener('mousemove', onCanvasHover);
+
+            animate();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Auto-rotate
+            if (autoRotate && nodeObjects.length > 0) {
+                scene.rotation.y += 0.002;
+            }
+
+            // Update node positions with physics
+            updatePhysics();
+
+            renderer.render(scene, camera);
+        }
+
+        function onCanvasClick(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            window.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            window.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            window.raycaster.setFromCamera(window.mouse, camera);
+            const intersects = window.raycaster.intersectObjects(nodeObjects.map(n => n.mesh));
+
+            if (intersects.length > 0) {
+                const clickedNode = nodes3D.find(n => n.mesh === intersects[0].object);
+                if (clickedNode) {
+                    selectNode3D(clickedNode);
+                }
+            }
+        }
+
+        function onCanvasHover(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            window.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            window.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            window.raycaster.setFromCamera(window.mouse, camera);
+            const intersects = window.raycaster.intersectObjects(nodeObjects.map(n => n.mesh));
+
+            renderer.domElement.style.cursor = intersects.length > 0 ? 'pointer' : 'default';
+        }
+
+        function selectNode3D(node) {
+            selectedNode3D = node;
+
+            // Reset all nodes
+            nodeObjects.forEach(n => {
+                n.mesh.scale.set(1, 1, 1);
+            });
+
+            // Highlight selected
+            if (node.mesh) {
+                node.mesh.scale.set(1.5, 1.5, 1.5);
+            }
+
+            // Update panel
+            updatePanel(node);
+
+            // If node has location, show on map
+            if (node.location) {
+                map.flyTo({
+                    center: node.location,
+                    zoom: 6,
+                    duration: 1500
+                });
+            }
+        }
+
+        function updatePanel(node) {
+            const panel = document.getElementById('panelContent');
+            panel.innerHTML = `
+                <div class="node-detail">
+                    <div class="node-header">
+                        <div class="node-type-badge ${node.type}">
+                            <div class="badge-dot"></div>
+                            ${node.type}
+                        </div>
+                    </div>
+
+                    <div class="node-title">${node.label}</div>
+
+                    ${node.location ? `
+                        <div class="geo-tag">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                            ${node.locationName}
+                        </div>
+                    ` : ''}
+
+                    <div class="node-content">${node.content}</div>
+
+                    ${node.reasoning && node.reasoning.length > 0 ? `
+                        <div class="reasoning-section">
+                            <div class="section-label">Reasoning Chain</div>
+                            ${node.reasoning.map((step, i) => `
+                                <div class="reasoning-step" style="animation-delay: ${i * 0.1}s">
+                                    <div class="step-text">${step}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+
+                    ${node.sources && node.sources.length > 0 ? `
+                        <div class="sources-section">
+                            <div class="section-label">Sources</div>
+                            ${node.sources.map(source => `
+                                <a href="${source.url}" class="source-link" target="_blank">
+                                    <svg class="source-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    <span>${source.title}</span>
+                                </a>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // Simple physics simulation
+        function updatePhysics() {
+            nodes3D.forEach((node, i) => {
+                // Apply forces from connections
+                node.connections.forEach(targetId => {
+                    const target = nodes3D.find(n => n.id === targetId);
+                    if (target) {
+                        const dx = target.position.x - node.position.x;
+                        const dy = target.position.y - node.position.y;
+                        const dz = target.position.z - node.position.z;
+                        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                        if (distance > 0) {
+                            const force = (distance - 150) * 0.01;
+                            node.velocity.x += (dx / distance) * force;
+                            node.velocity.y += (dy / distance) * force;
+                            node.velocity.z += (dz / distance) * force;
+                        }
+                    }
+                });
+
+                // Repulsion from other nodes
+                nodes3D.forEach((other, j) => {
+                    if (i !== j) {
+                        const dx = node.position.x - other.position.x;
+                        const dy = node.position.y - other.position.y;
+                        const dz = node.position.z - other.position.z;
+                        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                        if (distance < 200 && distance > 0) {
+                            const force = 2000 / (distance * distance);
+                            node.velocity.x += (dx / distance) * force;
+                            node.velocity.y += (dy / distance) * force;
+                            node.velocity.z += (dz / distance) * force;
+                        }
+                    }
+                });
+
+                // Apply velocity with damping
+                node.velocity.x *= 0.85;
+                node.velocity.y *= 0.85;
+                node.velocity.z *= 0.85;
+
+                node.position.x += node.velocity.x;
+                node.position.y += node.velocity.y;
+                node.position.z += node.velocity.z;
+
+                // Update mesh position
+                if (node.mesh) {
+                    node.mesh.position.set(node.position.x, node.position.y, node.position.z);
+                }
+            });
+
+            // Update edges
+            edgeObjects.forEach(edge => {
+                const source = nodes3D.find(n => n.id === edge.sourceId);
+                const target = nodes3D.find(n => n.id === edge.targetId);
+
+                if (source && target) {
+                    const geometry = edge.line.geometry;
+                    const positions = geometry.attributes.position.array;
+                    positions[0] = source.position.x;
+                    positions[1] = source.position.y;
+                    positions[2] = source.position.z;
+                    positions[3] = target.position.x;
+                    positions[4] = target.position.y;
+                    positions[5] = target.position.z;
+                    geometry.attributes.position.needsUpdate = true;
+                }
+            });
+        }
+
+        function add3DNode(data, parentId = null) {
+            console.log('Adding 3D node:', data.label, 'Type:', data.type, 'Location:', data.location);
+
+            const colors = {
+                researcher: 0x00ffff,
+                analyst: 0xff00ff,
+                factchecker: 0xffaa00,
+                concept: 0x8a2be2
+            };
+
+            const node = {
+                id: nodes3D.length,
+                label: data.label,
+                type: data.type,
+                content: data.content,
+                reasoning: data.reasoning || [],
+                sources: data.sources || [],
+                location: data.location || null,
+                locationName: data.locationName || null,
+                position: {
+                    x: (Math.random() - 0.5) * 400,
+                    y: (Math.random() - 0.5) * 400,
+                    z: (Math.random() - 0.5) * 400
+                },
+                velocity: { x: 0, y: 0, z: 0 },
+                connections: []
+            };
+
+            // Create sphere mesh
+            const geometry = new THREE.SphereGeometry(15, 32, 32);
+            const material = new THREE.MeshPhongMaterial({
+                color: colors[data.type],
+                emissive: colors[data.type],
+                emissiveIntensity: 0.5,
+                shininess: 100,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(node.position.x, node.position.y, node.position.z);
+
+            // Add glow
+            const glowGeometry = new THREE.SphereGeometry(18, 32, 32);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: colors[data.type],
+                transparent: true,
+                opacity: 0.2
+            });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            mesh.add(glow);
+
+            scene.add(mesh);
+            node.mesh = mesh;
+
+            // IMPORTANT: Add to arrays BEFORE creating connections
+            nodes3D.push(node);
+            nodeObjects.push(node);
+
+            // Update stats
+            document.getElementById('nodeCount').textContent = nodes3D.length;
+            document.getElementById('depthValue').textContent = Math.ceil(nodes3D.length / 4);
+
+            // Create connection
+            if (parentId !== null && nodes3D[parentId]) {
+                node.connections.push(parentId);
+                nodes3D[parentId].connections.push(node.id);
+
+                const lineGeometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(6);
+                lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+                const lineMaterial = new THREE.LineBasicMaterial({
+                    color: colors[data.type],
+                    transparent: true,
+                    opacity: 0.4,
+                    linewidth: 2
+                });
+
+                const line = new THREE.Line(lineGeometry, lineMaterial);
+                scene.add(line);
+
+                edgeObjects.push({
+                    line,
+                    sourceId: parentId,
+                    targetId: node.id
+                });
+
+                document.getElementById('edgeCount').textContent = edgeObjects.length;
+            } else if (nodes3D.length > 1 && parentId === null) {
+                // Connect to random existing node (excluding self)
+                const randomIdx = Math.floor(Math.random() * (nodes3D.length - 1));
+                node.connections.push(randomIdx);
+                nodes3D[randomIdx].connections.push(node.id);
+
+                const lineGeometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(6);
+                lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+                const lineMaterial = new THREE.LineBasicMaterial({
+                    color: colors[data.type],
+                    transparent: true,
+                    opacity: 0.4
+                });
+
+                const line = new THREE.Line(lineGeometry, lineMaterial);
+                scene.add(line);
+
+                edgeObjects.push({
+                    line,
+                    sourceId: randomIdx,
+                    targetId: node.id
+                });
+
+                document.getElementById('edgeCount').textContent = edgeObjects.length;
+            }
+
+            // Add to map if has location
+            if (node.location) {
+                console.log(`Adding map marker for ${node.label} at`, node.location);
+                addMapMarker(node.location, node.type, node.label);
+            }
+
+            return node;
+        }
+
+        // ============================================
+        // DEMO SIMULATION
+        // ============================================
+
+        function simulateKnowledgeWeaving(query) {
+            console.log('Simulating knowledge weaving for:', query);
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('thinkingOverlay').classList.add('active');
+
+            const thinkingStates = [
+                'Deploying Agent Swarm...',
+                'Researcher: Scanning Sources...',
+                'Analyst: Building Patterns...',
+                'Fact-Checker: Validating...',
+                'Synthesizing Graph...',
+                'Mapping Connections...'
+            ];
+
+            let thinkingIndex = 0;
+            const thinkingInterval = setInterval(() => {
+                document.getElementById('thinkingText').textContent = thinkingStates[thinkingIndex];
+                thinkingIndex = (thinkingIndex + 1) % thinkingStates.length;
+            }, 1800);
+
+            // Geospatial data for Norway EV query
+            const locations = [
+                { coords: [10.7522, 59.9139], name: 'Oslo, Norway' },
+                { coords: [-70.6693, -33.4489], name: 'Santiago, Chile' },
+                { coords: [115.8605, -31.9505], name: 'Perth, Australia' },
+                { coords: [139.6917, 35.6895], name: 'Tokyo, Japan' },
+                { coords: [13.4050, 52.5200], name: 'Berlin, Germany' }
+            ];
+
+            // Root node
+            setTimeout(() => {
+                add3DNode({
+                    label: 'EV Market Dynamics 2026',
+                    type: 'concept',
+                    content: query,
+                    reasoning: [
+                        'Query decomposed into causal chain: Supply → Production → Pricing → Market Impact',
+                        'Identified geographical factors: Norway (demand), Chile/Australia (supply)',
+                        'Mapped temporal constraints: 2026 projection timeline'
+                    ]
+                });
+            }, 1000);
+
+            // Progressive node generation with geo data
+            const generationPlan = [
+                {
+                    delay: 2500,
+                    nodes: [
+                        {
+                            label: 'Lithium Supply Crisis',
+                            type: 'researcher',
+                            location: locations[1].coords,
+                            locationName: locations[1].name,
+                            content: 'Chilean lithium production facing 18-month delay due to environmental regulations and infrastructure challenges. Expected output: 82,000 tons vs. planned 120,000 tons.',
+                            reasoning: [
+                                'Analyzed Chilean Ministry of Mining reports (2025-2026)',
+                                'Cross-referenced with SQM and Albemarle production schedules',
+                                'Identified regulatory bottlenecks in Atacama region'
+                            ],
+                            sources: [
+                                { title: 'Chilean Mining Ministry Report 2025', url: '#' },
+                                { title: 'SQM Production Forecast Q4 2025', url: '#' }
+                            ]
+                        },
+                        {
+                            label: 'Australian Mining Delays',
+                            type: 'researcher',
+                            location: locations[2].coords,
+                            locationName: locations[2].name,
+                            content: 'Western Australia lithium projects delayed by 12-16 months. Greenbushes expansion postponed to Q2 2027. Total supply gap: ~35,000 tons annually.',
+                            reasoning: [
+                                'Analyzed ASX mining company disclosures',
+                                'Reviewed geological survey timelines',
+                                'Assessed labor and equipment constraints'
+                            ],
+                            sources: [
+                                { title: 'Pilbara Minerals Quarterly Report', url: '#' },
+                                { title: 'Australia Geological Survey 2025', url: '#' }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    delay: 4500,
+                    nodes: [
+                        {
+                            label: 'Norway EV Adoption Rate',
+                            type: 'researcher',
+                            location: locations[0].coords,
+                            locationName: locations[0].name,
+                            content: 'Norway leads globally with 89% EV market share in new car sales. Total fleet: 650,000 EVs. Annual growth: 22%. High dependency on imported battery supply.',
+                            reasoning: [
+                                'Extracted data from Norwegian Road Federation statistics',
+                                'Analyzed registration data 2023-2025',
+                                'Mapped charging infrastructure deployment'
+                            ],
+                            sources: [
+                                { title: 'Norwegian Road Federation 2025', url: '#' },
+                                { title: 'Statistics Norway Transport Data', url: '#' }
+                            ]
+                        },
+                        {
+                            label: 'Global Battery Demand',
+                            type: 'analyst',
+                            location: locations[3].coords,
+                            locationName: locations[3].name,
+                            content: 'Asia-Pacific battery production capacity: 340 GWh in 2026. Europe: 180 GWh. Lithium content per kWh: 0.65kg. Total lithium demand: 338,000 tons vs. supply: 285,000 tons.',
+                            reasoning: [
+                                'Calculated regional production capacities',
+                                'Applied lithium intensity ratios per battery chemistry',
+                                'Modeled supply-demand imbalance scenarios'
+                            ],
+                            sources: [
+                                { title: 'Benchmark Mineral Intelligence Database', url: '#' }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    delay: 6500,
+                    nodes: [
+                        {
+                            label: 'Price Elasticity Model',
+                            type: 'analyst',
+                            content: 'Historical correlation: 10% lithium carbonate price increase → 3.2% battery pack cost increase → 1.8% vehicle MSRP increase. Norway market sensitivity: 1.4x global average due to subsidy structure.',
+                            reasoning: [
+                                'Regression analysis on 2020-2025 commodity-to-vehicle pricing',
+                                'Integrated Norway tax exemption and subsidy policies',
+                                'Calculated pass-through rates for major OEMs'
+                            ],
+                            sources: [
+                                { title: 'McKinsey Battery Cost Breakdown 2025', url: '#' },
+                                { title: 'Norway EV Incentive Policy Doc', url: '#' }
+                            ]
+                        },
+                        {
+                            label: 'Supply Shortage Verification',
+                            type: 'factchecker',
+                            content: 'Cross-validation complete. Three independent sources confirm 15-18% supply deficit for 2026. Production delay timelines verified against company SEC filings and geological reports.',
+                            reasoning: [
+                                'Verified Chilean data against government publications',
+                                'Confirmed Australian delays via ASX disclosures',
+                                'Checked IEA projections for consistency'
+                            ],
+                            sources: [
+                                { title: 'IEA Critical Minerals Report 2025', url: '#' },
+                                { title: 'USGS Lithium Statistics', url: '#' }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    delay: 8500,
+                    nodes: [
+                        {
+                            label: 'Norway Price Impact',
+                            type: 'analyst',
+                            location: locations[0].coords,
+                            locationName: locations[0].name,
+                            content: 'Projected EV price increase in Norway: 8-12% for mid-range models (e.g., Tesla Model 3: +$4,200-$5,800). Premium segment less affected. Used EV market may see 15-20% appreciation.',
+                            reasoning: [
+                                'Applied elasticity model to Norway-specific conditions',
+                                'Factored in subsidy erosion timeline (2026 policy changes)',
+                                'Calculated secondary market effects from new car pricing'
+                            ],
+                            sources: [
+                                { title: 'Norway EV Price Index 2025', url: '#' }
+                            ]
+                        },
+                        {
+                            label: 'Alternative Supply Routes',
+                            type: 'researcher',
+                            content: 'Emerging lithium sources: Nevada (USA) +12,000 tons, Zimbabwe +8,000 tons, Germany (geothermal) +3,000 tons. Total additional supply: 23,000 tons—insufficient to close 53,000 ton gap.',
+                            reasoning: [
+                                'Surveyed new mining projects with 2026 target dates',
+                                'Assessed development stage and feasibility',
+                                'Calculated realistic production ramp-up curves'
+                            ],
+                            sources: [
+                                { title: 'Lithium Americas Corp Projections', url: '#' },
+                                { title: 'Vulcan Energy Resources Report', url: '#' }
+                            ]
+                        },
+                        {
+                            label: 'Final Confidence Score',
+                            type: 'factchecker',
+                            content: 'Overall confidence: 84%. High confidence in supply shortage (92%). Medium-high confidence in price impact magnitude (78%). Uncertainty factors: policy intervention, demand destruction, technological substitution.',
+                            reasoning: [
+                                'Aggregated confidence scores across all nodes',
+                                'Identified uncertainty sources and sensitivity ranges',
+                                'Applied Bayesian updating based on source reliability'
+                            ],
+                            sources: []
+                        }
+                    ]
+                }
+            ];
+
+            generationPlan.forEach((step, stepIdx) => {
+                setTimeout(() => {
+                    step.nodes.forEach((nodeData, i) => {
+                        setTimeout(() => {
+                            const parentId = stepIdx === 0 ? 0 : null;
+                            add3DNode(nodeData, parentId);
+                        }, i * 600);
+                    });
+                }, step.delay);
+            });
+
+            // Complete thinking
+            setTimeout(() => {
+                clearInterval(thinkingInterval);
+                document.getElementById('thinkingOverlay').classList.remove('active');
+                updateStatus('Analysis Complete');
+                updateConfidence(84);
+            }, 12000);
+        }
+
+        function updateStatus(text) {
+            document.getElementById('statusText').textContent = text;
+        }
+
+        function updateConfidence(percent) {
+            const bars = document.querySelectorAll('.meter-bar');
+            const activeCount = Math.ceil((percent / 100) * bars.length);
+
+            bars.forEach((bar, i) => {
+                if (i < activeCount) {
+                    bar.classList.add('active');
+                } else {
+                    bar.classList.remove('active');
+                }
+            });
+
+            document.getElementById('confidenceValue').textContent = percent + '%';
+        }
+
+        // ============================================
+        // CONTROLS
+        // ============================================
+
+        document.getElementById('rotateToggle').addEventListener('click', () => {
+            autoRotate = !autoRotate;
+        });
+
+        document.getElementById('resetCamera').addEventListener('click', () => {
+            camera.position.set(0, 0, 600);
+            camera.lookAt(0, 0, 0);
+            scene.rotation.set(0, 0, 0);
+        });
+
+        document.getElementById('expandGraph').addEventListener('click', () => {
+            nodes3D.forEach(node => {
+                node.position.x *= 1.3;
+                node.position.y *= 1.3;
+                node.position.z *= 1.3;
+            });
+        });
+
+        // View toggle
+        document.querySelectorAll('.view-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                // In production, this would switch visualization modes
+            });
+        });
+
+        // Query submission
+        function handleQuery() {
+            const query = document.getElementById('queryInput').value.trim();
+            if (query) {
+                console.log('Starting query:', query);
+
+                // Clear existing graph
+                nodeObjects.forEach(n => {
+                    if (n.mesh) {
+                        scene.remove(n.mesh);
+                    }
+                });
+                edgeObjects.forEach(e => {
+                    if (e.line) {
+                        scene.remove(e.line);
+                    }
+                });
+
+                nodes3D = [];
+                edgeObjects = [];
+                nodeObjects = [];
+
+                // Clear map markers and connections
+                mapMarkers.forEach(m => m.remove());
+                mapMarkers = [];
+
+                if (map && map.getSource('connections')) {
+                    map.removeLayer('connection-lines');
+                    map.removeSource('connections');
+                }
+
+                // Reset stats
+                document.getElementById('nodeCount').textContent = '0';
+                document.getElementById('edgeCount').textContent = '0';
+                document.getElementById('depthValue').textContent = '0';
+                document.getElementById('locationCount').textContent = '0';
+                updateConfidence(0);
+
+                simulateKnowledgeWeaving(query);
+                updateStatus('Initializing...');
+            }
+        }
+
+        document.getElementById('submitBtn').addEventListener('click', handleQuery);
+        document.getElementById('queryInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleQuery();
+        });
+
+        // ============================================
+        // INITIALIZE
+        // ============================================
+
+        let threeJSReady = false;
+
+        window.addEventListener('load', () => {
+            initThreeJS();
+            threeJSReady = true;
+
+            // Auto-run demo only after both map and Three.js are ready
+            const startDemo = () => {
+                if (mapReady && threeJSReady) {
+                    console.log('Both systems ready, starting demo');
+                    document.getElementById('queryInput').value = 'How will the 2026 lithium shortage affect EV prices in Norway?';
+                    handleQuery();
+                } else {
+                    console.log('Waiting for systems... Map:', mapReady, 'Three.js:', threeJSReady);
+                    setTimeout(startDemo, 500);
+                }
+            };
+
+            setTimeout(startDemo, 1000);
+        });
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            const container = document.getElementById('graph3d');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        });
+
+        // Add CSS animation for markers (inject into page)
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes markerPulse {
+                0%, 100% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.5); opacity: 0.6; }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+
+</html>
